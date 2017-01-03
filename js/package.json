@@ -1,0 +1,15 @@
+{
+  "name": "bigchaindb-hs",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "browserify src/imports.js > src/externs.js && stack build"
+  },
+  "author": "scott@bigchaindb.com",
+  "license": "ISC"
+}

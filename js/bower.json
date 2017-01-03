@@ -1,0 +1,14 @@
+{
+  "name": "bigchaindb-js-externs",
+  "homepage": "https://github.com/libscott/bigchaindb-hs",
+  "authors": [
+    "Scott Sadler <scott@bigchaindb.com>"
+  ],
+  "description": "",
+  "main": "externs.js",
+  "license": "MIT",
+  "dependencies": {
+    "js-sha3": "^0.5.5",
+    "sjcl": "^1.0.6"
+  }
+}
