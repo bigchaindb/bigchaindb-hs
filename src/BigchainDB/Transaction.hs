@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module BigchainDB.Transaction 
-  ( module TT
+  ( module TTE
   , mkCreateTx
   , signTx
   , createOutput
@@ -20,6 +20,9 @@ import BigchainDB.CryptoConditions
 import BigchainDB.Transaction.Types as TT
 import BigchainDB.Prelude
 
+import BigchainDB.Transaction.Types as TTE
+  hiding (SignedTransaction(..), UnsignedTransaction(..))
+
 
 mkCreateTx :: Object -> PublicKey -> [(Amount, T.Text)]
            -> Object -> Except String UnsignedTransaction
@@ -28,11 +31,12 @@ mkCreateTx assetData creator outputSpecs metadata = do
         asset = AssetDefinition assetData
     when (null outputSpecs) $ throwE "mkCreateTx: outputs cannot be empty"
     outputs <- mapM createOutput outputSpecs
-    return $ UnsignedTx $
-      Tx Create asset [Input nullOutputLink ffill] outputs metadata
+    let tx = Tx Create asset [Input nullOutputLink ffill] outputs metadata
+        (txid, jsonVal) = txidAndJson tx
+    return $ UnsignedTx txid jsonVal tx
 
 
-signInput :: SecretKey -> TxId -> Input FulfillmentTemplate
+signInput :: SecretKey -> Txid -> Input FulfillmentTemplate
           -> Except String (Input T.Text)
 signInput sk txid (Input l (FFTemplate cond)) =
   let pk = toPublic sk
@@ -42,9 +46,9 @@ signInput sk txid (Input l (FFTemplate cond)) =
    in maybe (throwE "Could not sign tx") (return . Input l) mff
 
 
-signTx :: UnsignedTransaction -> SecretKey -> Except String SignedTransaction
-signTx u@(UnsignedTx (Tx op asset inputs outputs metadata)) sk = do
-  let (txid, jsonVal) = txidAndJson u
+signTx :: SecretKey -> UnsignedTransaction -> Except String SignedTransaction
+signTx sk (UnsignedTx txid jsonVal tx) = do
+  let (Tx op asset inputs outputs metadata) = tx
   signedInputs <- mapM (signInput sk txid) inputs
   let signedTx = Tx op asset signedInputs outputs metadata
       signedVal = set (key "inputs") (toJSON signedInputs) jsonVal

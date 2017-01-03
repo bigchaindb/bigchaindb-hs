@@ -58,9 +58,9 @@ signTx :: ApiMethod
 signTx = jsonAPI $ \obj -> do
   anyTx <- obj .: "tx"
   untx <- case anyTx of
-               TX.Signed _ -> fail "Tx is already signed"
-               TX.Unsigned tx -> pure tx
-  act <- TX.signTx untx <$> obj .: "key"
+               TX.AnyS _ -> fail "Tx is already signed"
+               TX.AnyU tx -> pure tx
+  act <- TX.signTx <$> obj .: "key" <*> pure untx
   return $ ExceptT $ return $ runExcept act
 
 

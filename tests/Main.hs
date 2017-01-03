@@ -4,10 +4,14 @@ import Test.Tasty
 import Test.Tasty.Golden
 import Test.Tasty.HUnit
 
+import Data.Aeson
 import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as Map
 import Data.Monoid
 import Data.Text (Text)
+
+import Lens.Micro
+import Lens.Micro.Aeson
 
 import BigchainDB.API
 import BigchainDB.CryptoConditions
@@ -19,6 +23,7 @@ import TestCryptoConditions
 
 main :: IO ()
 main = defaultMain $ testGroup "Tests" [ apiTests
+                                       , txTests
                                        , cryptoConditionsTests
                                        , dslParserTests
                                        , dslSerializerTests
@@ -36,6 +41,23 @@ apiTests = testGroup "Test the JSON API"
     run name file act =
       let out = file ++ ".out"
        in goldenVsFileDiff name diff file out (act >>= BS.writeFile out)
+
+
+txTests :: TestTree
+txTests = testGroup "Test Transaction ID validation"
+  [
+     testCase "tx-right-id-succeeds" $ do
+         res <- validateTx =<< create
+         res @?= "{\"result\":\"ok\"}"
+  ,
+     testCase "tx-wrong-id-fails" $ do
+         tx <- create
+         res <- validateTx $ tx & key "id" .~ "FFFd1a44abcf0a18b7aec2d406c11ed0cb0bd371847145be7822c76077ca5514"
+         res @?= "{\"error\":\"Error in $: Txid mismatch\"}"
+  ]
+  where
+    create = createTx "{\"creator\":\"7uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1\", \"outputs\":[[\"1\",\"(1 of 7uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1)\"]]}"
+
 
 
 dslParserTests :: TestTree

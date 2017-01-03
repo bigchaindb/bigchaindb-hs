@@ -10,15 +10,15 @@
 module BigchainDB.Transaction.Types
   ( Amount
   , AnyTransaction(..)
+  , SignedTransaction(..)
+  , UnsignedTransaction(..)
   , Asset(..)
   , FulfillmentTemplate(..)
   , Input(..)
   , Operation(..)
   , Output(..)
-  , SignedTransaction(..)
   , Transaction(..)
-  , TxId
-  , UnsignedTransaction(..)
+  , Txid
   , nullOutputLink
   , txidAndJson
   ) where
@@ -42,19 +42,19 @@ import BigchainDB.Prelude
 --------------------------------------------------------------------------------
 -- Transaction ID
 --
-newtype TxId = TxId T.Text
-  deriving (Show)
+newtype Txid = Txid T.Text
+  deriving (Eq, Show)
 
 
-instance ToJSON TxId where
-    toJSON (TxId s) = toJSON s
+instance ToJSON Txid where
+    toJSON (Txid s) = toJSON s
 
 
-instance FromJSON TxId where
+instance FromJSON Txid where
   parseJSON val = do
     txt <- parseJSON val
     case (T.all isHexDigit txt, T.length txt) of
-      (True, 64) -> pure $ TxId txt
+      (True, 64) -> pure $ Txid txt
       _          -> fail "Malformed ID"
 
 
@@ -79,19 +79,17 @@ instance FromJSON Operation where
 --------------------------------------------------------------------------------
 -- Transaction
 --
--- TODO: I think all transactions should have IDs, but optional in the case
--- of parsing an unsigned tx.
+-- Has no fromJSON instance, use AnyTransaction
 --
 -- TODO: Any way to type create vs transfer?
 --
-data Transaction ffill =
-  Tx Operation Asset [Input ffill] [Output] Object
+data Transaction f =
+  Tx Operation Asset [Input f] [Output] Object
   deriving (Show)
 
 
--- | Parses a transaction with a given fulfillment type
-instance FromJSON ffill => FromJSON (Transaction ffill) where
-  parseJSON = withObject "transaction" $ \obj -> do
+parseTx :: FromJSON f => Value -> Parser (Transaction f)
+parseTx = withObject "transaction" $ \obj -> do
     op <- obj .: "operation"
     Tx <$> pure op
        <*> (parseAsset op =<< obj .: "asset")
@@ -100,21 +98,8 @@ instance FromJSON ffill => FromJSON (Transaction ffill) where
        <*> obj .: "metadata"
 
 
---------------------------------------------------------------------------------
--- Unsigned Transaction 
---
--- Represents an unsigned Transaction having no ID and having
--- templates for fulfillments
---
-data UnsignedTransaction = UnsignedTx (Transaction FulfillmentTemplate)
-
-
-instance ToJSON UnsignedTransaction where
-  toJSON = snd . txidAndJson
-
-
-txidAndJson :: UnsignedTransaction -> (TxId, Value)
-txidAndJson (UnsignedTx (Tx op asset inputs outputs metadata)) =
+txidAndJson :: ToJSON f => Transaction f -> (Txid, Value)
+txidAndJson (Tx op asset inputs outputs metadata) =
   let tx = object (("id" .= txid) : ("inputs" .= toJSON inputs) : common)
       common = [ "operation" .= op
                , "outputs" .= outputs
@@ -123,9 +108,25 @@ txidAndJson (UnsignedTx (Tx op asset inputs outputs metadata)) =
                ]
       inputsNoSigs = (\(Input f _) -> Input f Null) <$> inputs
       txNoSigs = object (("inputs" .= inputsNoSigs) : common)
-      txid = TxId $ T.pack $ sha3 $ toStrict $ encodePretty' determ txNoSigs
+      txid = Txid $ T.pack $ sha3 $ toStrict $ encodePretty' determ txNoSigs
       determ = defConfig { confCompare = compare, confIndent=Spaces 0 }
    in (txid, tx)
+
+
+--------------------------------------------------------------------------------
+--
+
+data AnyTransaction = AnyS SignedTransaction
+                    | AnyU UnsignedTransaction
+  deriving (Show)
+
+
+instance FromJSON AnyTransaction where
+  parseJSON value = do
+    let mFfill = value ^? key "inputs" . nth 0 . key "fulfillment"
+    case mFfill of
+         (Just (String _)) -> AnyS <$> parseJSON value
+         _                 -> AnyU <$> parseJSON value
 
 
 --------------------------------------------------------------------------------
@@ -134,7 +135,19 @@ txidAndJson (UnsignedTx (Tx op asset inputs outputs metadata)) =
 -- Represents a signed transaction, having an ID, a JSON representation
 -- and having string fulfillments
 --
-data SignedTransaction = SignedTx TxId Value (Transaction T.Text)
+data SignedTransaction =
+  SignedTx Txid Value (Transaction T.Text)
+  deriving (Show)
+
+
+instance FromJSON SignedTransaction where
+  parseJSON val = do
+    txid <- (.: "id") =<< parseJSON val
+    tx <- parseTx val
+    let (txid', value) = txidAndJson tx
+    when (txid /= txid') $ fail "Txid mismatch"
+    --parseSignatures tx
+    pure $ SignedTx txid value tx
 
 
 instance ToJSON SignedTransaction where
@@ -142,28 +155,33 @@ instance ToJSON SignedTransaction where
 
 
 --------------------------------------------------------------------------------
--- Either a signed or an unsigned transaction
+-- Unsigned transaction
 --
-data AnyTransaction = Signed SignedTransaction
-                    | Unsigned UnsignedTransaction
+-- Represents an unsigned transaction, having an ID, a JSON representation
+-- and having template fulfillments
+--
+data UnsignedTransaction =
+  UnsignedTx Txid Value (Transaction FulfillmentTemplate)
+  deriving (Show)
 
 
--- | Detects and parses either a signed or unsigned transaction
-instance FromJSON AnyTransaction where
-  parseJSON value = do
-    let mId = value ^? key "id"
-        mFfill = value ^? key "inputs" . nth 0 . key "fulfillment"
-    case (mId, mFfill) of
-      (Just txid, Just (String _)) -> do
-        stx <- SignedTx <$> parseJSON txid <*> pure value <*> parseJSON value
-        return $ Signed stx
-      _ -> Unsigned . UnsignedTx <$> parseJSON value
+instance FromJSON UnsignedTransaction where
+  parseJSON val = do
+    mtxid <- (.:?"id") =<< parseJSON val
+    tx <- parseTx val
+    let (txid', value) = txidAndJson tx
+    when (fmap (==txid') mtxid == Just False) $ fail "Txid mismatch"
+    pure $ UnsignedTx txid' value tx
+
+
+instance ToJSON UnsignedTransaction where
+  toJSON (UnsignedTx _ val _) = val
 
 
 --------------------------------------------------------------------------------
 -- Asset
 --
-data Asset = AssetDefinition Object | AssetLink TxId
+data Asset = AssetDefinition Object | AssetLink Txid
   deriving (Show)
 
 
@@ -275,7 +293,7 @@ instance FromJSON FulfillmentTemplate where
 --------------------------------------------------------------------------------
 -- Output Link - identifies an Output
 --
-data OutputLink = OutputLink TxId Int
+data OutputLink = OutputLink Txid Int
   deriving (Show)
 
 
@@ -285,10 +303,10 @@ instance FromJSON OutputLink where
 
 
 instance ToJSON OutputLink where
-  toJSON (OutputLink (TxId "") _) = Null
-  toJSON (OutputLink (TxId txid) off) =
+  toJSON (OutputLink (Txid "") _) = Null
+  toJSON (OutputLink (Txid txid) off) =
     object ["txid" .= txid, "output" .= off]
 
 
 nullOutputLink :: OutputLink
-nullOutputLink = OutputLink (TxId "") 0
+nullOutputLink = OutputLink (Txid "") 0
