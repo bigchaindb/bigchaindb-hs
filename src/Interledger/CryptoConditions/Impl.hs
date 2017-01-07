@@ -83,8 +83,8 @@ data VerifyResult = Passed | Failed String
   deriving (Show, Eq)
 
 
-encodeCondition :: IsCondition c => c -> BL.ByteString
-encodeCondition c =
+encodeConditionASN :: IsCondition c => c -> ASN1
+encodeConditionASN c =
   let ct = getType c
       fingerprint = BL.toStrict $ getFingerprint c
       mask = typeMask $ getSubtypes c
@@ -95,7 +95,11 @@ encodeCondition c =
              , OctetString fingerprint
              , IntVal $ fromIntegral $ getCost c
              ] ++ mid ++ [End Sequence]
-   in asnChoice (typeID ct) $ bsPrim $ asnSequence $ concat $ asnPrim <$> body
+   in asnChoice (typeID ct) $ asnSequence body
+
+
+encodeCondition :: IsCondition c => c -> BL.ByteString
+encodeCondition = encodeASN1 DER . (:[]) . encodeConditionASN
 
 
 getConditionURI :: IsCondition c => c -> T.Text
@@ -203,10 +207,10 @@ thresholdFulfillment t subs =
       byCost = sortOn ffillCost withFf
       ffills = take ti $ catMaybes $ snd <$> byCost
       conds = encodeCondition . fst <$> drop ti byCost
-      body = asnSequence ((bsPrim $ asnSequence $ bslPrim <$> ffills)
-                          ++ (bsPrim $ asnSequence $ bslPrim <$> conds))
-      asn = asnChoice (typeID thresholdType) $ bsPrim body
-   in if length ffills == ti then Just asn else Nothing
+      body = asnSequenceBS [asnSequenceBS $ BL.toStrict <$> ffills, asnSequenceBS $ BL.toStrict <$> conds]
+      asn = asnChoiceBS (typeID thresholdType) body
+      encoded = encodeASN1 DER [asn]
+   in if length ffills == ti then Just encoded else Nothing
   where
     -- order by has ffill then cost of ffill
     ffillCost (c, Just _) = (0::Int, getCost c)
@@ -221,9 +225,9 @@ thresholdFingerprint t subs =
 thresholdFingerprintFromBins :: Word16 -> [BL.ByteString] -> BL.ByteString
 thresholdFingerprintFromBins t subs = 
   let subs' = x690Sort subs
-      encoded = asnSequence $ concat
-        [ asnPrim $ IntVal $ fromIntegral t
-        , bsPrim $ asnSequence $ bslPrim <$> subs'
+      encoded = asnSequenceBS $
+        [ encodeASN1' DER [IntVal $ fromIntegral t]
+        , asnSequenceBS $ BL.toStrict <$> subs'
         ]
    in BL.pack $ BA.unpack (hash encoded :: Digest SHA256)
 
@@ -270,8 +274,8 @@ ed25519Fingerprint = BL.pack . sha256
 
 
 ed25519Fulfillment :: PublicKey -> Signature -> BL.ByteString
-ed25519Fulfillment pk sig = asnChoice (typeID ed25519Type) body
-  where body = bsPrim $ asnSequence $ concat [keyPrim pk, keyPrim sig]
+ed25519Fulfillment pk sig = encodeASN1 DER $ (:[]) $ asnChoice (typeID ed25519Type) body
+  where body = asnSequence [keyPrim pk, keyPrim sig]
 
 
 verifyEd25519 :: (PublicKey -> BL.ByteString) -> Verify c

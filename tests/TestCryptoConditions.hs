@@ -5,8 +5,6 @@ module TestCryptoConditions
   ) where
 
 
-import Control.Monad.Trans.Except
-
 import qualified Data.Set as Set
 import Data.Text (Text)
 
@@ -14,7 +12,6 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import BigchainDB.Crypto
-import Interledger.CryptoConditions.Encoding
 import Interledger.CryptoConditions.Standard
 
 import CryptoConditions.TestEncoding
@@ -63,14 +60,14 @@ subTypes = testGroup "subTypes"
 
 
 testVerify :: TestTree
-testVerify = testGroup "Fulfillment verification"
+testVerify = testGroup "testVerify"
   [
     testCase "verify ed25519" $
       let sig = sign skBob pkBob "wat"
           cond = fulfillEd25519 pkBob sig $ ed25519Condition pkBob
           Just ffill = getFulfillment cond
           uri = getURI cond
-       in Passed @?= verifyStandard "wat" ffill uri
+       in verifyStandard "wat" ffill uri @?= Passed
   ]
 
 alice :: Text
