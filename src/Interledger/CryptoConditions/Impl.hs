@@ -261,7 +261,7 @@ ed25519Cost = 131072
 
 
 ed25519Fingerprint :: Ed2.PublicKey -> BS.ByteString
-ed25519Fingerprint pk = BS.pack $ sha256 body
+ed25519Fingerprint pk = sha256 body
   where body = encodeASN1' DER asn
         asn = [ Start Sequence
               , Other Context 0 $ toData pk
@@ -281,15 +281,39 @@ verifyEd25519 (Verify msg) = do
         let res = (,) <$> toKey (Ed2.publicKey bspk)
                       <*> toKey (Ed2.signature bssig)
         either throwParseError return res
-      _ -> fail "Ed25519 does not validate"
+      _ -> fail "Ed25519 does not parse"
   if Ed2.verify pk msg sig
      then pure $ ed25519Fingerprint pk
      else fail "Ed25519 does not validate"
 
 
 --------------------------------------------------------------------------------
+-- | Preimage Condition type
+--
+
+preimageType :: ConditionType
+preimageType = CT 0 "preimage-sha-256" False "sha-256"
+
+
+preimageFulfillment :: BS.ByteString -> BS.ByteString
+preimageFulfillment pre = encodeASN1' DER body
+  where body = fiveBellsThingy (typeId preimageType) [pre]
+
+
+preimageCost :: BS.ByteString -> Int
+preimageCost = BS.length 
+
+
+verifyPreimage :: Verify c -> ParseASN1 BS.ByteString
+verifyPreimage _ = do
+  element <- getNext
+  case element of 
+    (Other Context 0 preimage) -> pure $ sha256 preimage
+    _                          -> throwParseError "Preimage does not parse"
+
+--------------------------------------------------------------------------------
 -- Utilities
 
 
-sha256 :: BA.ByteArrayAccess a => a -> [Word8]
-sha256 a = BA.unpack $ (hash a :: Digest SHA256)
+sha256 :: BA.ByteArrayAccess a => a -> BS.ByteString
+sha256 a = BS.pack $ BA.unpack $ (hash a :: Digest SHA256)

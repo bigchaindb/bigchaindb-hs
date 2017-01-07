@@ -38,6 +38,7 @@ import Interledger.CryptoConditions.Encoding
 fiveBellsSuite :: TestTree
 fiveBellsSuite = testGroup "fiveBellsSuites"
   [ testMinimalEd25519
+  , testMinimalPreimage
   --, testBasicThreshold
   --, testHashing
   ]
@@ -85,6 +86,24 @@ testMinimalEd25519 = testGroup f
     cond = fulfillEd25519 pub sig $ ed25519Condition pub
 
 
+testMinimalPreimage :: TestTree
+testMinimalPreimage = testGroup f
+  [ testCase "binary condition" $ encodeCondition cond @?= condBin
+  , testCase "uri" $ getURI cond @?= condUri
+  , testCase "fulfillment" $ getFulfillment cond @?= Just ffillment
+  , testCase "verify" $
+      verifyStandard (encodeUtf8 msg) ffillment condUri @?= Passed
+  ]
+  where
+    f = "0000_test-minimal-preimage.json"
+    val = suiteJson f
+    preimage = encodeUtf8 $ qu val "{json:{preimage}}"
+    condBin = fromB16 $ qu val "{conditionBinary}"
+    ffillment = fromB16 $ qu val "{fulfillment}"
+    (msg,condUri) = qu val "{message,conditionUri}"
+    cond = preimageCondition preimage
+
+
 --testBasicThreshold :: TestTree
 --testBasicThreshold = testGroup f
 --  [ testCase "binary condition" $ encodeCondition cond @?= condBin 
@@ -105,6 +124,6 @@ testHashing = testCase "testHashing" $ do
   print $ decodeASN1 DER $ BL.fromStrict asn
   let fing = fromB64 "U1YhFdW0lOI-SVF3PbDP4t_lVefj_-tB5P11yvfBaoE"
   print fing
-  print $ BS.pack $ sha256 asn
+  print $ sha256 asn
 
   
