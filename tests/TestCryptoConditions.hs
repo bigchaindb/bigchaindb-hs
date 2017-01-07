@@ -4,22 +4,30 @@ module TestCryptoConditions
   ( cryptoConditionsTests
   ) where
 
-import Test.Tasty
-import Test.Tasty.HUnit
+
+import Control.Monad.Trans.Except
 
 import qualified Data.Set as Set
 import Data.Text (Text)
 
+import Test.Tasty
+import Test.Tasty.HUnit
+
 import BigchainDB.Crypto
+import Interledger.CryptoConditions.Encoding
 import Interledger.CryptoConditions.Standard
+
+import CryptoConditions.TestEncoding
 
 
 cryptoConditionsTests :: TestTree
 cryptoConditionsTests = testGroup "CryptoConditions"
   [ uris
   , subTypes
+  , testVerify
+  , testEncoding
   ]
- 
+
 
 uris :: TestTree
 uris = testGroup "URIs"
@@ -53,6 +61,17 @@ subTypes = testGroup "subTypes"
                             , CT 2 "b" undefined undefined
                             ]
 
+
+testVerify :: TestTree
+testVerify = testGroup "Fulfillment verification"
+  [
+    testCase "verify ed25519" $
+      let sig = sign skBob pkBob "wat"
+          cond = fulfillEd25519 pkBob sig $ ed25519Condition pkBob
+          Just ffill = getFulfillment cond
+          uri = getURI cond
+       in Passed @?= verifyStandard "wat" ffill uri
+  ]
 
 alice :: Text
 alice = "7uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1"

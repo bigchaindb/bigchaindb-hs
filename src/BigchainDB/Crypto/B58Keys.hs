@@ -5,13 +5,17 @@ module BigchainDB.Crypto.B58Keys
   , PublicKey(..)
   , SecretKey(..)
   , Signature(..)
+  , fromData
+  , toData
+  , parseKey
+  , unsafeParseKey
   ) where
 
 import Control.Monad.Trans.Except
 import Crypto.Error (CryptoFailable(..))
 import qualified Crypto.PubKey.Ed25519 as Ed2
 
-import Data.Aeson
+import Data.Aeson 
 import Data.Aeson.Types
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as BS
@@ -21,22 +25,20 @@ import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 
 
-class B58ED2Key a where
-  parseKey :: T.Text -> Except String a
-  unsafeParseKey :: T.Text -> a
-  unsafeParseKey = either error id . runExcept . parseKey
+class BA.ByteArrayAccess a => B58ED2Key a where
+  mkKey :: BS.ByteString -> CryptoFailable a
 
 
 instance B58ED2Key PublicKey where
-  parseKey = fmap PublicKey . parseKey' Ed2.publicKey
+  mkKey = fmap PublicKey . Ed2.publicKey
 
 
 instance B58ED2Key SecretKey where
-  parseKey = fmap SecretKey . parseKey' Ed2.secretKey
+  mkKey = fmap SecretKey . Ed2.secretKey
 
 
 instance B58ED2Key Signature where
-  parseKey = fmap Signature . parseKey' Ed2.signature
+  mkKey = fmap Signature . Ed2.signature
 
 
 newtype PublicKey = PublicKey Ed2.PublicKey
@@ -79,13 +81,25 @@ instance Show Signature where
 jsonKey :: (T.Text -> Except String a) -> Value -> Parser a
 jsonKey f val = parseJSON val >>= either fail return . runExcept . f
 
-parseKey' :: (BS.ByteString -> CryptoFailable a) -> T.Text -> Except String a
-parseKey' f t = do
+
+parseKey :: B58ED2Key k => T.Text -> Except String k
+parseKey t = do
   let mbs = decodeBase58 bitcoinAlphabet $ encodeUtf8 t
-  bs <- maybe (throwE "Invalid base58 key") return mbs
-  case f bs of
-       CryptoPassed a -> return a
-       CryptoFailed e -> throwE $ show e
+  maybe (throwE "Invalid base58 key") fromData mbs
+
+
+unsafeParseKey :: B58ED2Key k => T.Text -> k
+unsafeParseKey = either error id . runExcept . parseKey
+
+
+fromData :: B58ED2Key k => BS.ByteString -> Except String k
+fromData bs = case mkKey bs of
+   CryptoPassed a -> return a
+   CryptoFailed e -> throwE $ show e
+
+
+toData :: B58ED2Key k => k -> BS.ByteString
+toData = BS.pack . BA.unpack
 
 
 b58 :: BS.ByteString -> String

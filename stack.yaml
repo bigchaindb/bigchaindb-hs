@@ -1,6 +1,7 @@
 resolver: lts-7.14
 packages:
     - .
+    - ext/hs-asn1/encoding
 extra-deps:
     - base58-bytestring-0.1.0
 

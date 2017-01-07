@@ -52,10 +52,11 @@ txTests = testGroup "Test Transaction ID validation"
   ,
      testCase "tx-wrong-id-fails" $ do
          tx <- create
-         res <- validateTx $ tx & key "id" .~ "FFFd1a44abcf0a18b7aec2d406c11ed0cb0bd371847145be7822c76077ca5514"
-         res @?= "{\"error\":\"Error in $: Txid mismatch\"}"
+         res <- validateTx $ tx & key "id" .~ badId
+         res @?= "{\"error\":\"Error in $: id incorrect\"}"
   ]
   where
+    badId = "FFFd1a44abcf0a18b7aec2d406c11ed0cb0bd371847145be7822c76077ca5514"
     create = createTx "{\"creator\":\"7uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1\", \"outputs\":[[\"1\",\"(1 of 7uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1)\"]]}"
 
 

@@ -4,7 +4,7 @@
 -- Transaction data types and JSON instances
 --
 -- TODO: This module should try not to allow instantiation of invalid
--- transactions. Hide constructors where appropriate.
+-- transactions, at least from JSON.
 --------------------------------------------------------------------------------
 
 module BigchainDB.Transaction.Types

@@ -42,7 +42,7 @@ signInput sk txid (Input l (FFTemplate cond)) =
   let pk = toPublic sk
       sig = sign sk pk (C8.pack $ show (l, txid))
       fcond = fulfillEd25519 pk sig cond
-      mff = getFulfillmentB64 fcond
+      mff = getFulfillmentBase64 fcond
    in maybe (throwE "Could not sign tx") (return . Input l) mff
 
 
