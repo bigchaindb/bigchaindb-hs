@@ -18,19 +18,18 @@ module Interledger.CryptoConditions.Standard
   , verifyStandard
   ) where
 
+import qualified Crypto.PubKey.Ed25519 as Ed2
 
 import Data.ByteString as BS
 import Data.Word
 import Data.Text (Text)
-
-import BigchainDB.Crypto
 
 import Interledger.CryptoConditions.Impl as CCI
 
 
 data Condition =
     Threshold Word16 [Condition]
-  | Ed25519 PublicKey (Maybe Signature)
+  | Ed25519 Ed2.PublicKey (Maybe Ed2.Signature)
   deriving (Show, Eq)
 
 
@@ -49,11 +48,12 @@ instance IsCondition Condition where
   verifyFf 4 = verifyEd25519
 
 
-ed25519Condition :: PublicKey -> Condition
+ed25519Condition :: Ed2.PublicKey -> Condition
 ed25519Condition pk = Ed25519 pk Nothing
 
 
-fulfillEd25519 :: PublicKey -> Signature -> Condition -> Condition
+fulfillEd25519 :: Ed2.PublicKey -> Ed2.Signature
+               -> Condition -> Condition
 fulfillEd25519 pk sig (Threshold t subs) =
   Threshold t $ fulfillEd25519 pk sig <$> subs
 fulfillEd25519 pk sig e@(Ed25519 pk' Nothing) =

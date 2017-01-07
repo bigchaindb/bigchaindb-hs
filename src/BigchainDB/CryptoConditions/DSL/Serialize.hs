@@ -48,7 +48,7 @@ serialize (Threshold t subs) = do
   return $ "(" <> toLazyText (decimal t) <> " of "
                <> TL.intercalate ", " subs' <> ")"
 serialize (Ed25519 pk _) = do
-  local <- state $ localName pk
+  local <- state $ localName (PK pk)
   return $ "%" <> local
 
 

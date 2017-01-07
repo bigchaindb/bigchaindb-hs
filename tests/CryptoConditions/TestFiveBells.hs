@@ -38,7 +38,7 @@ import Interledger.CryptoConditions.Encoding
 fiveBellsSuite :: TestTree
 fiveBellsSuite = testGroup "fiveBellsSuites"
   [ testMinimalEd25519
-  , testBasicThreshold
+  --, testBasicThreshold
   --, testHashing
   ]
 
@@ -77,22 +77,24 @@ testMinimalEd25519 = testGroup f
   where
     f = "0004_test-minimal-ed25519.json"
     val = suiteJson f
-    pub = fromB64Key $ qu val "{json:{publicKey}}"
-    sig = fromB64Key $ qu val "{json:{signature}}"
+    (PK pub) = fromB64Key $ qu val "{json:{publicKey}}"
+    (Sig sig) = fromB64Key $ qu val "{json:{signature}}"
     condBin = fromB16 $ qu val "{conditionBinary}"
     ffillment = fromB16 $ qu val "{fulfillment}"
     (msg,condUri) = qu val "{message,conditionUri}"
     cond = fulfillEd25519 pub sig $ ed25519Condition pub
 
 
-testBasicThreshold :: TestTree
-testBasicThreshold = testCase f $ do
-  let (Just cost) = val ^? key "cost" . _Integral
-      ffillment = fromB16 $ val ^. key "fulfillment" . _String
-  print ffillment 
-  where
-    f = "0008_test-basic-threshold.json"
-    val = suiteJson f :: Value
+--testBasicThreshold :: TestTree
+--testBasicThreshold = testGroup f
+--  [ testCase "binary condition" $ encodeCondition cond @?= condBin 
+--  ]
+--  where
+--    f = "0008_test-basic-threshold.json"
+--    val = suiteJson f :: Value
+--    threshold = qu val "{json:{threshold}}"
+--    cond = Threshold threshold
+--      [ ]
 
 
 testHashing = testCase "testHashing" $ do

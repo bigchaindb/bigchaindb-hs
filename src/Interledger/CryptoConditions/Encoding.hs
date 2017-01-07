@@ -3,12 +3,16 @@
 module Interledger.CryptoConditions.Encoding where
 
 
+import Crypto.Error (CryptoFailable(..))
+import qualified Crypto.PubKey.Ed25519 as Ed2
+
 import Data.ASN1.BinaryEncoding
 import Data.ASN1.BinaryEncoding.Raw
 import Data.ASN1.Encoding
 import Data.ASN1.Parse
 import Data.ASN1.Types
 import Data.Bits
+import qualified Data.ByteArray as BA
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.ByteString.Base64.URL as B64
@@ -16,8 +20,6 @@ import qualified Data.ByteString.Char8 as C8
 import Data.List (sortOn)
 import Data.Monoid
 import Data.Word
-
-import BigchainDB.Crypto
 
 
 b64EncodeStripped :: BS.ByteString -> BS.ByteString
@@ -71,10 +73,6 @@ fiveBellsThingy tid bs =
    in Start c : [Other Context i s | (i,s) <- zip [0..] bs] ++ [End c]
 
 
-keyPrim :: B58ED2Key k => k -> ASN1
-keyPrim = OctetString . toData
-
-
 mkSmallestLength :: Int -> ASN1Length
 mkSmallestLength i
   | i < 0x80  = LenShort i
@@ -106,3 +104,13 @@ parseASN1 :: BS.ByteString -> ParseASN1 a -> Either String a
 parseASN1 bs act = showErr decoded >>= runParseASN1 act
   where decoded = decodeASN1 DER $ BL.fromStrict bs
         showErr = either (Left . show) Right
+
+
+toKey :: CryptoFailable a -> Either String a
+toKey r = case r of
+   CryptoPassed a -> return a
+   CryptoFailed e -> Left $ show e
+
+
+toData :: BA.ByteArrayAccess a => a -> BS.ByteString
+toData = BS.pack . BA.unpack

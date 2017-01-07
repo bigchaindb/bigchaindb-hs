@@ -4,6 +4,7 @@ module TestCryptoConditions
   ( cryptoConditionsTests
   ) where
 
+import qualified Crypto.PubKey.Ed25519 as Ed2
 
 import qualified Data.Set as Set
 import Data.Text (Text)
@@ -66,11 +67,10 @@ alice = "7uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1"
 bob :: Text
 bob = "DCBsceTfmZXL5d9t3enc7VPdYpPETixD12qKXs53oW6Q"
 
-pkAlice :: PublicKey
-pkAlice = unsafeParseKey alice
+pkAlice, pkBob :: Ed2.PublicKey
+pkAlice = let (PK k) = unsafeParseKey alice in k
+pkBob = let (PK k) = unsafeParseKey bob in k
 
-pkBob :: PublicKey
-pkBob = unsafeParseKey bob
-
-skBob :: SecretKey
-skBob = unsafeParseKey "8LDm2sbJNZgQAgDyE8GEEY7eYLsXk4oe1sBS4NPLfTL"
+skBob :: Ed2.SecretKey
+skBob = let (SK k) = unsafeParseKey "8LDm2sbJNZgQAgDyE8GEEY7eYLsXk4oe1sBS4NPLfTL"
+         in k

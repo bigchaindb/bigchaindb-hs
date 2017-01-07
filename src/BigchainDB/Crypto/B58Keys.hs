@@ -30,18 +30,18 @@ class BA.ByteArrayAccess a => B58ED2Key a where
 
 
 instance B58ED2Key PublicKey where
-  mkKey = fmap PublicKey . Ed2.publicKey
+  mkKey = fmap PK . Ed2.publicKey
 
 
 instance B58ED2Key SecretKey where
-  mkKey = fmap SecretKey . Ed2.secretKey
+  mkKey = fmap SK . Ed2.secretKey
 
 
 instance B58ED2Key Signature where
-  mkKey = fmap Signature . Ed2.signature
+  mkKey = fmap Sig . Ed2.signature
 
 
-newtype PublicKey = PublicKey Ed2.PublicKey
+newtype PublicKey = PK Ed2.PublicKey
   deriving (BA.ByteArrayAccess, Eq)
 
 instance ToJSON PublicKey where
@@ -53,7 +53,7 @@ instance FromJSON PublicKey where
 instance Show PublicKey where
   show = show . toJSON
 
-newtype SecretKey = SecretKey Ed2.SecretKey
+newtype SecretKey = SK Ed2.SecretKey
   deriving (BA.ByteArrayAccess, Eq)
 
 instance ToJSON SecretKey where
@@ -65,7 +65,7 @@ instance FromJSON SecretKey where
 instance Show SecretKey where
   show = show . toJSON
 
-newtype Signature = Signature Ed2.Signature
+newtype Signature = Sig Ed2.Signature
   deriving (BA.ByteArrayAccess, Eq)
 
 instance ToJSON Signature where
@@ -104,3 +104,4 @@ toData = BS.pack . BA.unpack
 
 b58 :: BS.ByteString -> String
 b58 = BS8.unpack . encodeBase58 bitcoinAlphabet
+

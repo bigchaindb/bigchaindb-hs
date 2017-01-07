@@ -4,7 +4,8 @@ import Test.Tasty
 import Test.Tasty.Golden
 import Test.Tasty.HUnit
 
-import Data.Aeson
+import qualified Crypto.PubKey.Ed25519 as Ed2
+
 import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as Map
 import Data.Monoid
@@ -82,7 +83,7 @@ dslSerializerTests = testGroup "CryptoConditions DSL Serializer"
   [ 
     testCase "simple" $
       serializeDSL (Threshold 2 [ed2Alice, ed2Bob, ed2Bob])
-      @?= ("(2 of %A, %B, %B)", Map.fromList [("A", pkAlice), ("B", pkBob)])
+      @?= ("(2 of %A, %B, %B)", Map.fromList [("A", PK pkAlice), ("B", PK pkBob)])
   ]
 
 
@@ -94,6 +95,6 @@ alice, bob :: Text
 alice = "7uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1"
 bob = "DCBsceTfmZXL5d9t3enc7VPdYpPETixD12qKXs53oW6Q"
 
-pkAlice, pkBob :: PublicKey
-pkAlice = unsafeParseKey alice
-pkBob = unsafeParseKey bob
+pkAlice, pkBob :: Ed2.PublicKey
+pkAlice = let (PK k) = unsafeParseKey alice in k
+pkBob = let (PK k) = unsafeParseKey bob in k

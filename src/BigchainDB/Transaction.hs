@@ -7,6 +7,9 @@ module BigchainDB.Transaction
   , createOutput
   ) where
 
+
+import qualified Crypto.PubKey.Ed25519 as Ed2
+
 import Data.Aeson
 
 import qualified Data.ByteString.Char8 as C8
@@ -26,7 +29,7 @@ import BigchainDB.Transaction.Types as TTE
 
 mkCreateTx :: Object -> PublicKey -> [(Amount, T.Text)]
            -> Object -> Except String UnsignedTransaction
-mkCreateTx assetData creator outputSpecs metadata = do
+mkCreateTx assetData (PK creator) outputSpecs metadata = do
     let ffill = FFTemplate $ ed25519Condition creator
         asset = AssetDefinition assetData
     when (null outputSpecs) $ throwE "mkCreateTx: outputs cannot be empty"
@@ -38,9 +41,9 @@ mkCreateTx assetData creator outputSpecs metadata = do
 
 signInput :: SecretKey -> Txid -> Input FulfillmentTemplate
           -> Except String (Input T.Text)
-signInput sk txid (Input l (FFTemplate cond)) =
-  let pk = toPublic sk
-      sig = sign sk pk (C8.pack $ show (l, txid))
+signInput (SK sk) txid (Input l (FFTemplate cond)) =
+  let pk = Ed2.toPublic sk
+      sig = Ed2.sign sk pk (C8.pack $ show (l, txid))
       fcond = fulfillEd25519 pk sig cond
       mff = getFulfillmentBase64 fcond
    in maybe (throwE "Could not sign tx") (return . Input l) mff

@@ -42,7 +42,8 @@ dslParser = cond <* (endOfInput <|> fail "Expected end")
     ed25519 = do
       (t, l) <- runScanner 0 (\l c -> if isBase58 c then Just (l+1) else Nothing)
       if (l::Int) == 43 || l == 44
-         then pure $ (ed25519Condition <$> exceptToFail (parseKey t))
+         then do (PK k) <- exceptToFail (parseKey t)
+                 pure $ pure $ ed25519Condition k
          else fail "Not a public key"
 
 

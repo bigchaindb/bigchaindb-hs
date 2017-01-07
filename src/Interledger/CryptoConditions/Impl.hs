@@ -31,13 +31,12 @@
 module Interledger.CryptoConditions.Impl where
 
 
-import Control.Monad.Trans.Except
-
 import Crypto.Hash
+import qualified Crypto.PubKey.Ed25519 as Ed2
 
 import Data.ASN1.BinaryEncoding
 import Data.ASN1.BinaryEncoding.Raw
-import Data.ASN1.BitArray
+--import Data.ASN1.BitArray
 import Data.ASN1.Encoding
 import Data.ASN1.Parse
 import Data.ASN1.Types
@@ -53,8 +52,6 @@ import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import Data.Word
-
-import BigchainDB.Crypto
 
 import Interledger.CryptoConditions.Encoding
 
@@ -263,7 +260,7 @@ ed25519Cost :: Int
 ed25519Cost = 131072
 
 
-ed25519Fingerprint :: PublicKey -> BS.ByteString
+ed25519Fingerprint :: Ed2.PublicKey -> BS.ByteString
 ed25519Fingerprint pk = BS.pack $ sha256 body
   where body = encodeASN1' DER asn
         asn = [ Start Sequence
@@ -271,7 +268,7 @@ ed25519Fingerprint pk = BS.pack $ sha256 body
               ]
 
 
-ed25519Fulfillment :: PublicKey -> Signature -> BS.ByteString
+ed25519Fulfillment :: Ed2.PublicKey -> Ed2.Signature -> BS.ByteString
 ed25519Fulfillment pk sig = encodeASN1' DER body
   where body = fiveBellsThingy (typeId ed25519Type) [toData pk, toData sig]
 
@@ -281,10 +278,11 @@ verifyEd25519 (Verify msg) = do
   elements <- (,) <$> getNext <*> getNext
   (pk, sig) <- case elements of
       (Other Context 0 bspk, Other Context 1 bssig) -> do
-        let res = runExcept $ (,) <$> fromData bspk <*> fromData bssig
+        let res = (,) <$> toKey (Ed2.publicKey bspk)
+                      <*> toKey (Ed2.signature bssig)
         either throwParseError return res
       _ -> fail "Ed25519 does not validate"
-  if verify pk msg sig
+  if Ed2.verify pk msg sig
      then pure $ ed25519Fingerprint pk
      else fail "Ed25519 does not validate"
 
