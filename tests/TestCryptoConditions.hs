@@ -15,14 +15,15 @@ import BigchainDB.Crypto
 import Interledger.CryptoConditions.Standard
 
 import CryptoConditions.TestEncoding
+import CryptoConditions.TestFiveBells
 
 
 cryptoConditionsTests :: TestTree
 cryptoConditionsTests = testGroup "CryptoConditions"
   [ uris
   , subTypes
-  , testVerify
   , testEncoding
+  , fiveBellsSuite
   ]
 
 
@@ -58,17 +59,6 @@ subTypes = testGroup "subTypes"
                             , CT 2 "b" undefined undefined
                             ]
 
-
-testVerify :: TestTree
-testVerify = testGroup "testVerify"
-  [
-    testCase "verify ed25519" $
-      let sig = sign skBob pkBob "wat"
-          cond = fulfillEd25519 pkBob sig $ ed25519Condition pkBob
-          Just ffill = getFulfillment cond
-          uri = getURI cond
-       in verifyStandard "wat" ffill uri @?= Passed
-  ]
 
 alice :: Text
 alice = "7uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1"

@@ -45,7 +45,6 @@ import qualified Data.Attoparsec.Text as AT
 import Data.Bits
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Base64.URL as B64
 import Data.List ((\\), sortOn)
 import Data.Maybe
@@ -57,7 +56,6 @@ import Data.Word
 
 import BigchainDB.Crypto
 
-
 import Interledger.CryptoConditions.Encoding
 
 
@@ -68,100 +66,94 @@ class IsCondition c where
   getCost :: c -> Int
   getType :: c -> ConditionType
   getTypeById :: c -> Int -> ConditionType
-  getFingerprint :: c -> BL.ByteString
-  getFulfillment :: c -> Maybe BL.ByteString
+  getFingerprint :: c -> BS.ByteString
+  getFulfillment :: c -> Maybe BS.ByteString
   getSubtypes :: c -> Set.Set ConditionType
   getURI :: c -> T.Text
   getURI = getConditionURI
-  verifyFf :: Int -> Verify c -> ParseASN1 BL.ByteString
+  verifyFf :: Int -> Verify c -> ParseASN1 BS.ByteString
 
 
-newtype Verify c = Verify BS.ByteString 
+newtype Verify c = Verify BS.ByteString
 
 
 data VerifyResult = Passed | Failed String
   deriving (Show, Eq)
 
 
-encodeConditionASN :: IsCondition c => c -> ASN1
+encodeConditionASN :: IsCondition c => c -> [ASN1]
 encodeConditionASN c =
   let ct = getType c
-      fingerprint = BL.toStrict $ getFingerprint c
-      mask = typeMask $ getSubtypes c
-      mid = if hasSubtypes ct
-               then [BitString $ toBitArray mask 0]
-               else []
-      body = [ Start Sequence
-             , OctetString fingerprint
-             , IntVal $ fromIntegral $ getCost c
-             ] ++ mid ++ [End Sequence]
-   in asnChoice (typeID ct) $ asnSequence body
+      fingerprint = getFingerprint c
+      costBs = BS.pack $ bytesOfUInt $ fromIntegral $ getCost c
+      --mask = typeMask $ getSubtypes c
+      --mid = if hasSubtypes ct
+      --         then [BitString $ toBitArray mask 0]
+      --         else []
+   in fiveBellsThingy (typeId ct) [fingerprint, costBs]
 
 
-encodeCondition :: IsCondition c => c -> BL.ByteString
-encodeCondition = encodeASN1 DER . (:[]) . encodeConditionASN
+encodeCondition :: IsCondition c => c -> BS.ByteString
+encodeCondition = encodeASN1' DER . encodeConditionASN
 
 
 getConditionURI :: IsCondition c => c -> T.Text
 getConditionURI c =
   let ct = getType c
-      f = decodeUtf8 $ b64EncodeStripped $ BL.toStrict $ getFingerprint c
+      f = decodeUtf8 $ b64EncodeStripped $ getFingerprint c
       cost = T.pack $ show $ getCost c
       subtypes = if hasSubtypes ct
                     then "&subtypes=" <> typeNames (getSubtypes c)
                     else ""
-   in "ni:///" <> hashFunc ct <> ";" <> f
+   in "ni:" <> hashFunc ct <> ";" <> f
        <> "?fpt=" <> typeName ct <> "&cost="
        <> cost <> subtypes
 
 
 getFulfillmentBase64 :: IsCondition c => c -> Maybe T.Text
 getFulfillmentBase64 =
-  fmap (decodeUtf8 . B64.encode . BL.toStrict) . getFulfillment
+  fmap (decodeUtf8 . B64.encode) . getFulfillment
 
 
-verifyFulfillment :: IsCondition c => Verify c -> BL.ByteString
+verifyFulfillment :: IsCondition c => Verify c -> BS.ByteString
                   -> T.Text -> VerifyResult
-verifyFulfillment v bsl = either Failed go . uriGetFingerprint
-  where bs = BL.toStrict bsl
-        go f1 = case parseASN1 bs (verifyPoly v) of
+verifyFulfillment v bs = either Failed go . uriGetFingerprint
+  where go f1 = case parseASN1 bs (verifyPoly v) of
                      Left err -> Failed err
                      Right f2 ->
-                       if BL.fromStrict f1 == f2
+                       if f1 == f2
                           then Passed
                           else Failed "fulfillment does not match"
 
 
-verifyPoly :: IsCondition c => Verify c -> ParseASN1 BL.ByteString
+verifyPoly :: IsCondition c => Verify c -> ParseASN1 BS.ByteString
 verifyPoly v = do
   asn <- getNext
   case asn of
-    (Other Context typeId bs') ->
-        let parse = verifyFf typeId v
-            unEither = either throwParseError pure
-         in unEither $ parseASN1 bs' parse
-    _ -> throwParseError "Failed parsing body"
+    (Start c@(Container Context tid)) -> do
+      res <- verifyFf tid v
+      end <- getNext
+      if end /= End c then throwParseError "Failed parsing end"
+                      else pure res
+    body -> throwParseError ("Failed parsing body: " ++ show body)
 
 
 --------------------------------------------------------------------------------
 -- | Parse a fingerprint from a uri
 
 uriGetFingerprint :: T.Text -> Either String BS.ByteString
-uriGetFingerprint t = (encodeUtf8 . pad) <$> parse t >>= B64.decode
+uriGetFingerprint t = parse t >>= b64DecodeStripped . encodeUtf8 
   where
     parse = AT.parseOnly $ do
-        "ni:///" >> AT.skipWhile (/=';') >> ";"
+        "ni:" >> AT.skipWhile (/=';') >> ";"
         AT.takeWhile1 (/='?')
-    pad fi = let r = 4 - mod (T.length fi) 4
-                 n = if r == 4 then 0 else r
-              in fi <> T.replicate n "="
 
 
 --------------------------------------------------------------------------------
 -- | Type of a condition
 --
 data ConditionType = CT
-  { typeID :: Int
+  { typeId :: Int
   , typeName :: T.Text
   , hasSubtypes :: Bool
   , hashFunc :: T.Text
@@ -172,11 +164,11 @@ data ConditionType = CT
 -- Eq and Ord instances consider only the ID
 --
 instance Eq ConditionType where
-  ct == ct' = typeID ct == typeID ct'
+  ct == ct' = typeId ct == typeId ct'
 
 
 instance Ord ConditionType where
-  ct <= ct' = typeID ct <= typeID ct'
+  ct <= ct' = typeId ct <= typeId ct'
 
 
 -- Functions for working with sets of condition types
@@ -187,7 +179,7 @@ typeNames = T.intercalate "," . map typeName . Set.toAscList
 
 typeMask :: Set.Set ConditionType -> BS.ByteString
 typeMask cts =
-  let bits = Set.map ((2^) . typeID) cts
+  let bits = Set.map ((2^) . typeId) cts
       mask = foldl (.|.) 0 bits :: Int
    in BS.singleton $ fromIntegral mask
 
@@ -200,16 +192,18 @@ thresholdType :: ConditionType
 thresholdType = CT 2 "threshold-sha-256" True "sha-256"
 
 
-thresholdFulfillment :: IsCondition c => Word16 -> [c] -> Maybe BL.ByteString
+thresholdFulfillment :: IsCondition c => Word16 -> [c] -> Maybe BS.ByteString
 thresholdFulfillment t subs =
   let ti = fromIntegral t
       withFf = zip subs (getFulfillment <$> subs)
       byCost = sortOn ffillCost withFf
       ffills = take ti $ catMaybes $ snd <$> byCost
       conds = encodeCondition . fst <$> drop ti byCost
-      body = asnSequenceBS [asnSequenceBS $ BL.toStrict <$> ffills, asnSequenceBS $ BL.toStrict <$> conds]
-      asn = asnChoiceBS (typeID thresholdType) body
-      encoded = encodeASN1 DER [asn]
+      body = asnSequenceBS [ asnSequenceBS ffills
+                           , asnSequenceBS conds
+                           ]
+      asn = asnChoiceBS (typeId thresholdType) body
+      encoded = encodeASN1' DER [asn]
    in if length ffills == ti then Just encoded else Nothing
   where
     -- order by has ffill then cost of ffill
@@ -217,19 +211,19 @@ thresholdFulfillment t subs =
     ffillCost _           = (1, 0)
 
 
-thresholdFingerprint :: IsCondition c => Word16 -> [c] -> BL.ByteString
+thresholdFingerprint :: IsCondition c => Word16 -> [c] -> BS.ByteString
 thresholdFingerprint t subs =
   thresholdFingerprintFromBins t $ encodeCondition <$> subs
 
 
-thresholdFingerprintFromBins :: Word16 -> [BL.ByteString] -> BL.ByteString
+thresholdFingerprintFromBins :: Word16 -> [BS.ByteString] -> BS.ByteString
 thresholdFingerprintFromBins t subs = 
   let subs' = x690Sort subs
       encoded = asnSequenceBS $
         [ encodeASN1' DER [IntVal $ fromIntegral t]
-        , asnSequenceBS $ BL.toStrict <$> subs'
+        , asnSequenceBS subs'
         ]
-   in BL.pack $ BA.unpack (hash encoded :: Digest SHA256)
+   in BS.pack $ BA.unpack (hash encoded :: Digest SHA256)
 
 
 thresholdSubtypes :: IsCondition c => [c] -> Set.Set ConditionType
@@ -245,12 +239,12 @@ thresholdCost t subs =
    in sum largest + 1024 * length subs
 
 
-verifyThreshold :: IsCondition c => Verify c -> ParseASN1 BL.ByteString
+verifyThreshold :: IsCondition c => Verify c -> ParseASN1 BS.ByteString
 verifyThreshold v =
   onNextContainer Sequence $ do
     ffilled <- onNextContainer Sequence $ getMany $ verifyPoly v
     conds <- onNextContainer Sequence $ getMany $
-      encodeASN1 DER . (:[]) <$> getNext
+      encodeASN1' DER . (:[]) <$> getNext
     let t = fromIntegral $ length ffilled
     if ffilled \\ conds /= []
        then throwParseError "Threshold does not satisfy"
@@ -262,33 +256,36 @@ verifyThreshold v =
 --
 
 ed25519Type :: ConditionType
-ed25519Type = CT 4 "ed25519" False "sha-256"
+ed25519Type = CT 4 "ed25519-sha-256" False "sha-256"
 
 
 ed25519Cost :: Int
 ed25519Cost = 131072
 
 
-ed25519Fingerprint :: PublicKey -> BL.ByteString
-ed25519Fingerprint = BL.pack . sha256
+ed25519Fingerprint :: PublicKey -> BS.ByteString
+ed25519Fingerprint pk = BS.pack $ sha256 body
+  where body = encodeASN1' DER asn
+        asn = [ Start Sequence
+              , Other Context 0 $ toData pk
+              ]
 
 
-ed25519Fulfillment :: PublicKey -> Signature -> BL.ByteString
-ed25519Fulfillment pk sig = encodeASN1 DER $ (:[]) $ asnChoice (typeID ed25519Type) body
-  where body = asnSequence [keyPrim pk, keyPrim sig]
+ed25519Fulfillment :: PublicKey -> Signature -> BS.ByteString
+ed25519Fulfillment pk sig = encodeASN1' DER body
+  where body = fiveBellsThingy (typeId ed25519Type) [toData pk, toData sig]
 
 
-verifyEd25519 :: (PublicKey -> BL.ByteString) -> Verify c
-              -> ParseASN1 BL.ByteString
-verifyEd25519 encode (Verify msg) = do
-  elements <- getNextContainer Sequence
+verifyEd25519 :: Verify c -> ParseASN1 BS.ByteString
+verifyEd25519 (Verify msg) = do
+  elements <- (,) <$> getNext <*> getNext
   (pk, sig) <- case elements of
-      [OctetString bspk, OctetString bssig] -> do
+      (Other Context 0 bspk, Other Context 1 bssig) -> do
         let res = runExcept $ (,) <$> fromData bspk <*> fromData bssig
         either throwParseError return res
       _ -> fail "Ed25519 does not validate"
   if verify pk msg sig
-     then pure $ encode pk
+     then pure $ ed25519Fingerprint pk
      else fail "Ed25519 does not validate"
 
 

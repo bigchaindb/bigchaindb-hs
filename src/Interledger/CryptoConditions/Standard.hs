@@ -20,7 +20,6 @@ module Interledger.CryptoConditions.Standard
 
 
 import Data.ByteString as BS
-import Data.ByteString.Lazy as BL
 import Data.Word
 import Data.Text (Text)
 
@@ -47,7 +46,7 @@ instance IsCondition Condition where
   getSubtypes (Threshold _ subs) = thresholdSubtypes subs
   getSubtypes _ = mempty
   verifyFf 2 = verifyThreshold
-  verifyFf 4 = verifyEd25519 (\pk -> encodeCondition $ Ed25519 pk Nothing)
+  verifyFf 4 = verifyEd25519
 
 
 ed25519Condition :: PublicKey -> Condition
@@ -62,5 +61,5 @@ fulfillEd25519 pk sig e@(Ed25519 pk' Nothing) =
 fulfillEd25519 _ _ c = c
 
 
-verifyStandard :: BS.ByteString -> BL.ByteString -> Text -> VerifyResult
+verifyStandard :: BS.ByteString -> BS.ByteString -> Text -> VerifyResult
 verifyStandard msg = verifyFulfillment (Verify msg :: Verify Condition)
