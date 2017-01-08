@@ -187,6 +187,87 @@ unTypeMask maskbs = Set.fromList $
 
 
 --------------------------------------------------------------------------------
+-- | (0) Preimage Condition
+--
+
+preimageType :: ConditionType
+preimageType = CT 0 "preimage-sha-256" False "sha-256"
+
+
+preimageFulfillment :: BS.ByteString -> Fulfillment
+preimageFulfillment pre = encodeASN1' DER body
+  where body = fiveBellsThingy (typeId preimageType) [pre]
+
+
+preimageCost :: BS.ByteString -> Int
+preimageCost = BS.length
+
+
+preimageFingerprint :: Preimage -> Fingerprint
+preimageFingerprint = sha256
+
+
+parsePreimage :: (Preimage -> c) -> Message -> ParseASN1 c
+parsePreimage construct _ = construct <$> parseOther 0
+
+
+--------------------------------------------------------------------------------
+-- | (1) Prefix condition
+
+
+prefixType :: ConditionType
+prefixType = CT 1 "prefix-sha-256" True "sha-256"
+
+
+prefixCost :: IsCondition c => Prefix -> Int -> c -> Int
+prefixCost pre maxMessageLength c =
+  BS.length pre + getCost c + 1024 + maxMessageLength
+
+
+prefixFingerprint :: IsCondition c => Prefix -> Int -> c -> Fingerprint
+prefixFingerprint pre mml cond = sha256 body
+  where body = encodeASN1' DER asn
+        mmlbs = BS.pack $ bytesOfUInt $ fromIntegral mml
+        condAsn = encodeConditionASN cond
+        asn = asnSeq Sequence $
+              [ Other Context 0 pre
+              , Other Context 1 mmlbs
+              ] ++ asnSeq (Container Context 2) condAsn
+
+
+prefixFulfillment :: IsCondition c => Prefix -> Int -> c -> Maybe Fulfillment
+prefixFulfillment pre mml cond = 
+  let mmlbs = BS.pack $ bytesOfUInt $ fromIntegral mml
+      msubffill = getFulfillment cond
+      getAsn subffill =
+        let subAsn = either (error . show) id $ decodeASN1' DER $ subffill
+         in asnSeq (Container Context 1) $
+             [ Other Context 0 pre
+             , Other Context 1 mmlbs
+             ] ++ asnSeq (Container Context 2) subAsn
+   in encodeASN1' DER . getAsn <$> msubffill
+
+
+prefixSubtypes :: IsCondition c => c -> Set.Set ConditionType
+prefixSubtypes cond =
+  let cts = Set.singleton $ getType cond
+      all' = Set.union cts $ getSubtypes cond
+   in Set.delete prefixType all'
+
+
+parsePrefix :: IsCondition c => (Prefix -> Int -> c -> c) -> Message
+            -> ParseASN1 c
+parsePrefix construct msg = do
+  (pre, mmlbs) <- (,) <$> parseOther 0 <*> parseOther 1
+  let mml = fromIntegral $ uIntFromBytes $ BS.unpack mmlbs
+  when (mml < BS.length msg) $
+    throwParseError "Max message length exceeded" -- TODO
+  -- TODO: D is equal to C?
+  cond <- onNextContainer (Container Context 2) (verifyPoly (pre <> msg))
+  pure $ construct pre mml cond
+
+
+--------------------------------------------------------------------------------
 -- | (2) Threshold condition
 --
 
@@ -296,87 +377,6 @@ parseEd25519 construct msg = do
   if Ed2.verify pk msg sig
      then pure $ construct pk sig
      else fail "Ed25519 does not validate"
-
-
---------------------------------------------------------------------------------
--- | (0) Preimage Condition
---
-
-preimageType :: ConditionType
-preimageType = CT 0 "preimage-sha-256" False "sha-256"
-
-
-preimageFulfillment :: BS.ByteString -> Fulfillment
-preimageFulfillment pre = encodeASN1' DER body
-  where body = fiveBellsThingy (typeId preimageType) [pre]
-
-
-preimageCost :: BS.ByteString -> Int
-preimageCost = BS.length
-
-
-preimageFingerprint :: Preimage -> Fingerprint
-preimageFingerprint = sha256
-
-
-parsePreimage :: (Preimage -> c) -> Message -> ParseASN1 c
-parsePreimage construct _ = construct <$> parseOther 0
-
-
---------------------------------------------------------------------------------
--- | (1) Prefix condition
-
-
-prefixType :: ConditionType
-prefixType = CT 1 "prefix-sha-256" True "sha-256"
-
-
-prefixCost :: IsCondition c => Prefix -> Int -> c -> Int
-prefixCost pre maxMessageLength c =
-  BS.length pre + getCost c + 1024 + maxMessageLength
-
-
-prefixFingerprint :: IsCondition c => Prefix -> Int -> c -> Fingerprint
-prefixFingerprint pre mml cond = sha256 body
-  where body = encodeASN1' DER asn
-        mmlbs = BS.pack $ bytesOfUInt $ fromIntegral mml
-        condAsn = encodeConditionASN cond
-        asn = asnSeq Sequence $
-              [ Other Context 0 pre
-              , Other Context 1 mmlbs
-              ] ++ asnSeq (Container Context 2) condAsn
-
-
-prefixFulfillment :: IsCondition c => Prefix -> Int -> c -> Maybe Fulfillment
-prefixFulfillment pre mml cond = 
-  let mmlbs = BS.pack $ bytesOfUInt $ fromIntegral mml
-      msubffill = getFulfillment cond
-      getAsn subffill =
-        let subAsn = either (error . show) id $ decodeASN1' DER $ subffill
-         in asnSeq (Container Context 1) $
-             [ Other Context 0 pre
-             , Other Context 1 mmlbs
-             ] ++ asnSeq (Container Context 2) subAsn
-   in encodeASN1' DER . getAsn <$> msubffill
-
-
-prefixSubtypes :: IsCondition c => c -> Set.Set ConditionType
-prefixSubtypes cond =
-  let cts = Set.singleton $ getType cond
-      all' = Set.union cts $ getSubtypes cond
-   in Set.delete prefixType all'
-
-
-parsePrefix :: IsCondition c => (Prefix -> Int -> c -> c) -> Message
-            -> ParseASN1 c
-parsePrefix construct msg = do
-  (pre, mmlbs) <- (,) <$> parseOther 0 <*> parseOther 1
-  let mml = fromIntegral $ uIntFromBytes $ BS.unpack mmlbs
-  when (mml < BS.length msg) $
-    throwParseError "Max message length exceeded" -- TODO
-  -- TODO: D is equal to C?
-  cond <- onNextContainer (Container Context 2) (verifyPoly (pre <> msg))
-  pure $ construct pre mml cond
 
 
 --------------------------------------------------------------------------------
