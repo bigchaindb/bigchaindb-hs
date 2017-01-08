@@ -34,6 +34,8 @@ module Interledger.CryptoConditions.Impl where
 import Crypto.Hash
 import qualified Crypto.PubKey.Ed25519 as Ed2
 
+import Control.Monad (when)
+
 import Data.ASN1.BinaryEncoding
 import Data.ASN1.BinaryEncoding.Raw
 import Data.ASN1.Encoding
@@ -69,13 +71,12 @@ class Show c => IsCondition c where
   anon :: Int -> BS.ByteString -> Int -> Set.Set Int -> c
 
 
+-- Parameter aliases
 type Message = BS.ByteString
 type Fulfillment = BS.ByteString
 type Preimage = BS.ByteString
-
-
-data VerifyResult = Passed | Failed String
-  deriving (Show, Eq)
+type Prefix = BS.ByteString
+type Fingerprint = BS.ByteString
 
 
 encodeConditionASN :: IsCondition c => c -> [ASN1]
@@ -186,14 +187,14 @@ unTypeMask maskbs = Set.fromList $
 
 
 --------------------------------------------------------------------------------
--- | Aggregate condition container.
+-- | (2) Threshold condition
 --
 
 thresholdType :: ConditionType
 thresholdType = CT 2 "threshold-sha-256" True "sha-256"
 
 
-thresholdFulfillment :: IsCondition c => Word16 -> [c] -> Maybe BS.ByteString
+thresholdFulfillment :: IsCondition c => Word16 -> [c] -> Maybe Fulfillment
 thresholdFulfillment t subs =
   let ti = fromIntegral t
       withFf = zip subs (getFulfillment <$> subs)
@@ -212,13 +213,13 @@ thresholdFulfillment t subs =
     ffillCost _           = (1, 0)
 
 
-thresholdFingerprint :: IsCondition c => Word16 -> [c] -> BS.ByteString
+thresholdFingerprint :: IsCondition c => Word16 -> [c] -> Fingerprint
 thresholdFingerprint t subs =
   let asns = encodeConditionASN <$> subs
    in thresholdFingerprintFromAsns t asns
 
 
-thresholdFingerprintFromAsns :: Word16 -> [[ASN1]] -> BS.ByteString
+thresholdFingerprintFromAsns :: Word16 -> [[ASN1]] -> Fingerprint
 thresholdFingerprintFromAsns t asns = 
   let subs' = x690SortAsn asns
       c = Container Context 1
@@ -244,8 +245,8 @@ thresholdCost t subs =
 
 parseThreshold :: IsCondition c => (Word16 -> [c] -> c) -> Message 
                 -> ParseASN1 c
-parseThreshold construct v = do
-  ffills <- onNextContainer (Container Context 0) $ getMany $ verifyPoly v
+parseThreshold construct msg = do
+  ffills <- onNextContainer (Container Context 0) $ getMany $ verifyPoly msg
   conds <- onNextContainer (Container Context 1) $ getMany parseCondition
   let t = fromIntegral $ length ffills
   pure $ construct t (conds ++ ffills)
@@ -262,7 +263,7 @@ parseCondition = withContainerContext $ \tid -> do
 
 
 --------------------------------------------------------------------------------
--- | ED25519-SHA256 Condition type
+-- | (4) ED25519-SHA256 Condition
 --
 
 ed25519Type :: ConditionType
@@ -273,7 +274,7 @@ ed25519Cost :: Int
 ed25519Cost = 131072
 
 
-ed25519Fingerprint :: Ed2.PublicKey -> BS.ByteString
+ed25519Fingerprint :: Ed2.PublicKey -> Fingerprint
 ed25519Fingerprint pk = sha256 body
   where body = encodeASN1' DER asn
         asn = [ Start Sequence
@@ -281,7 +282,7 @@ ed25519Fingerprint pk = sha256 body
               ]
 
 
-ed25519Fulfillment :: Ed2.PublicKey -> Ed2.Signature -> BS.ByteString
+ed25519Fulfillment :: Ed2.PublicKey -> Ed2.Signature -> Fulfillment
 ed25519Fulfillment pk sig = encodeASN1' DER body
   where body = fiveBellsThingy (typeId ed25519Type) [toData pk, toData sig]
 
@@ -298,24 +299,84 @@ parseEd25519 construct msg = do
 
 
 --------------------------------------------------------------------------------
--- | Preimage Condition type
+-- | (0) Preimage Condition
 --
 
 preimageType :: ConditionType
 preimageType = CT 0 "preimage-sha-256" False "sha-256"
 
 
-preimageFulfillment :: BS.ByteString -> BS.ByteString
+preimageFulfillment :: BS.ByteString -> Fulfillment
 preimageFulfillment pre = encodeASN1' DER body
   where body = fiveBellsThingy (typeId preimageType) [pre]
 
 
 preimageCost :: BS.ByteString -> Int
-preimageCost = BS.length 
+preimageCost = BS.length
+
+
+preimageFingerprint :: Preimage -> Fingerprint
+preimageFingerprint = sha256
 
 
 parsePreimage :: (Preimage -> c) -> Message -> ParseASN1 c
 parsePreimage construct _ = construct <$> parseOther 0
+
+
+--------------------------------------------------------------------------------
+-- | (1) Prefix condition
+
+
+prefixType :: ConditionType
+prefixType = CT 1 "prefix-sha-256" True "sha-256"
+
+
+prefixCost :: IsCondition c => Prefix -> Int -> c -> Int
+prefixCost pre maxMessageLength c =
+  BS.length pre + getCost c + 1024 + maxMessageLength
+
+
+prefixFingerprint :: IsCondition c => Prefix -> Int -> c -> Fingerprint
+prefixFingerprint pre mml cond = sha256 body
+  where body = encodeASN1' DER asn
+        mmlbs = BS.pack $ bytesOfUInt $ fromIntegral mml
+        condAsn = encodeConditionASN cond
+        asn = asnSeq Sequence $
+              [ Other Context 0 pre
+              , Other Context 1 mmlbs
+              ] ++ asnSeq (Container Context 2) condAsn
+
+
+prefixFulfillment :: IsCondition c => Prefix -> Int -> c -> Maybe Fulfillment
+prefixFulfillment pre mml cond = 
+  let mmlbs = BS.pack $ bytesOfUInt $ fromIntegral mml
+      msubffill = getFulfillment cond
+      getAsn subffill =
+        let subAsn = either (error . show) id $ decodeASN1' DER $ subffill
+         in asnSeq (Container Context 1) $
+             [ Other Context 0 pre
+             , Other Context 1 mmlbs
+             ] ++ asnSeq (Container Context 2) subAsn
+   in encodeASN1' DER . getAsn <$> msubffill
+
+
+prefixSubtypes :: IsCondition c => c -> Set.Set ConditionType
+prefixSubtypes cond =
+  let cts = Set.singleton $ getType cond
+      all' = Set.union cts $ getSubtypes cond
+   in Set.delete prefixType all'
+
+
+parsePrefix :: IsCondition c => (Prefix -> Int -> c -> c) -> Message
+            -> ParseASN1 c
+parsePrefix construct msg = do
+  (pre, mmlbs) <- (,) <$> parseOther 0 <*> parseOther 1
+  let mml = fromIntegral $ uIntFromBytes $ BS.unpack mmlbs
+  when (mml < BS.length msg) $
+    throwParseError "Max message length exceeded" -- TODO
+  -- TODO: D is equal to C?
+  cond <- onNextContainer (Container Context 2) (verifyPoly (pre <> msg))
+  pure $ construct pre mml cond
 
 
 --------------------------------------------------------------------------------

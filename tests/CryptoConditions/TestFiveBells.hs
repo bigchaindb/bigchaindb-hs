@@ -33,6 +33,7 @@ fiveBellsSuite = testGroup "fiveBells"
   [ testMinimalEd25519
   , testMinimalPreimage
   , testMinimalThreshold
+  , testMinimalPrefix
   ]
 
 
@@ -120,4 +121,24 @@ testMinimalThreshold = testGroup f
     ffillment = fromB16 $ qu val "{fulfillment}"
     (msg,condUri) = qu val "{message,conditionUri}"
     cond = Threshold t [preimageCondition preimage]
+
+
+testMinimalPrefix :: TestTree
+testMinimalPrefix = testGroup f
+  [ testCase "binary condition" $ encodeCondition cond `compareASN1` condBin
+  , testCase "uri" $ getURI cond @?= condUri
+  , testCase "fulfillment" $
+      fromJust (getFulfillment cond) `compareASN1` ffillment
+  , testCase "verify" $ testVerify msg ffillment condUri
+  ]
+  where
+    f = "0001_test-minimal-prefix.json"
+    val = suiteJson f
+    maxMessageLength = qu val "{json:{maxMessageLength}}"
+    prefix = encodeUtf8 $ qu val "{json:{prefix}}"
+    preimage = encodeUtf8 $ qu val "{json:{subfulfillment:{preimage}}}"
+    condBin = fromB16 $ qu val "{conditionBinary}"
+    ffillment = fromB16 $ qu val "{fulfillment}"
+    (msg,condUri) = qu val "{message,conditionUri}"
+    cond = Prefix prefix maxMessageLength (preimageCondition preimage)
 
