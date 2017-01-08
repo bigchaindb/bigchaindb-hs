@@ -32,10 +32,14 @@ data Condition =
     Threshold Word16 [Condition]
   | Ed25519 Ed2.PublicKey (Maybe Ed2.Signature)
   | Preimage BS.ByteString (Maybe BS.ByteString)
+  | Anon Int BS.ByteString Int
   deriving (Show, Eq)
 
 
 instance IsCondition Condition where
+  getType (Anon 0 _ _) = preimageType
+  getType (Anon 2 _ _) = thresholdType
+  getType (Anon 4 _ _) = ed25519Type
   getType (Threshold _ _) = thresholdType
   getType (Ed25519 _ _) = ed25519Type
   getType (Preimage _ _) = preimageType
@@ -43,21 +47,26 @@ instance IsCondition Condition where
   getCost (Ed25519 _ _) = ed25519Cost
   getCost (Preimage _ (Just pre)) = preimageCost pre
   getCost (Preimage _ _) = error "time to refactor!"
+  getCost (Anon _ _ c) = c
   getFingerprint (Threshold t subs) = thresholdFingerprint t subs
   getFingerprint (Ed25519 pk _) = ed25519Fingerprint pk
   getFingerprint (Preimage hash _) = hash
+  getFingerprint (Anon _ fp _) = fp
   getFulfillment (Threshold t subs) = thresholdFulfillment t subs
   getFulfillment (Ed25519 pk msig) = ed25519Fulfillment pk <$> msig
   getFulfillment (Preimage _ mpre) = preimageFulfillment <$> mpre
+  getFulfillment (Anon _ _ _) = Nothing
   getSubtypes (Threshold _ subs) = thresholdSubtypes subs
   getSubtypes _ = mempty
   verifyFf 0 = verifyPreimage
-  verifyFf 2 = verifyThreshold
+  verifyFf 2 = verifyThreshold Threshold
   verifyFf 4 = verifyEd25519
+  anon = Anon
 
 
 ed25519Condition :: Ed2.PublicKey -> Condition
 ed25519Condition pk = Ed25519 pk Nothing
+
 
 preimageCondition :: BS.ByteString -> Condition
 preimageCondition pre = Preimage (sha256 pre) (Just pre)

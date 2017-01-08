@@ -39,7 +39,6 @@ import Data.ASN1.BinaryEncoding.Raw
 import Data.ASN1.Encoding
 import Data.ASN1.Parse
 import Data.ASN1.Types
-import qualified Data.Attoparsec.Text as AT
 import Data.Bits
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as BS
@@ -49,26 +48,27 @@ import Data.Maybe
 import Data.Monoid
 import qualified Data.Set as Set
 import qualified Data.Text as T
-import Data.Text.Encoding (encodeUtf8, decodeUtf8)
+import Data.Text.Encoding (decodeUtf8)
 import Data.Word
 
 import Interledger.CryptoConditions.Encoding
 
 import Debug.Trace
 
+
 --------------------------------------------------------------------------------
 -- | Class of things that are conditions
 --
-class IsCondition c where
+class (Show c) => IsCondition c where
   getCost :: c -> Int
   getType :: c -> ConditionType
-  getTypeById :: c -> Int -> ConditionType
   getFingerprint :: c -> BS.ByteString
   getFulfillment :: c -> Maybe BS.ByteString
   getSubtypes :: c -> Set.Set ConditionType
   getURI :: c -> T.Text
   getURI = getConditionURI
-  verifyFf :: Int -> Verify c -> ParseASN1 BS.ByteString
+  verifyFf :: Int -> Verify c -> ParseASN1 c
+  anon :: Int -> BS.ByteString -> Int -> c
 
 
 newtype Verify c = Verify BS.ByteString
@@ -113,36 +113,29 @@ getFulfillmentBase64 =
 
 verifyFulfillment :: IsCondition c => Verify c -> BS.ByteString
                   -> T.Text -> VerifyResult
-verifyFulfillment v bs = either Failed go . uriGetFingerprint
-  where go f1 = case parseASN1 bs (verifyPoly v) of
-                     Left err -> Failed err
-                     Right f2 ->
-                       if f1 == f2
-                          then Passed
-                          else Failed "fulfillment does not match"
+verifyFulfillment v bs uri =
+  case parseASN1 bs (verifyPoly v) of
+       Left err -> Failed err
+       Right c ->
+         if getURI c == uri
+            then Passed
+            else Failed "fulfillment does not match"
 
 
-verifyPoly :: IsCondition c => Verify c -> ParseASN1 BS.ByteString
-verifyPoly v = do
+verifyPoly :: IsCondition c => Verify c -> ParseASN1 c
+verifyPoly v = withContainerContext (flip verifyFf v)
+
+
+withContainerContext :: (Int -> ParseASN1 a) -> ParseASN1 a
+withContainerContext fp = do
   asn <- getNext
   case asn of
     (Start c@(Container Context tid)) -> do
-      res <- verifyFf tid v
+      res <- fp tid
       end <- getNext
       if end /= End c then throwParseError "Failed parsing end"
                       else pure res
-    body -> throwParseError ("Failed parsing body: " ++ show body)
-
-
---------------------------------------------------------------------------------
--- | Parse a fingerprint from a uri
-
-uriGetFingerprint :: T.Text -> Either String BS.ByteString
-uriGetFingerprint t = parse t >>= b64DecodeStripped . encodeUtf8 
-  where
-    parse = AT.parseOnly $ do
-        "ni:" >> AT.skipWhile (/=';') >> ";"
-        AT.takeWhile1 (/='?')
+    other -> throwParseError ("Not a container context: " ++ show other)
 
 
 --------------------------------------------------------------------------------
@@ -238,15 +231,22 @@ thresholdCost t subs =
    in sum largest + 1024 * length subs
 
 
-verifyThreshold :: IsCondition c => Verify c -> ParseASN1 BS.ByteString
-verifyThreshold v = do
-  ffills' <- onNextContainer (Container Context 0) $ getMany $ verifyPoly v
-  conds <- onNextContainer (Container Context 1) $ getMany getNext
-  let t = fromIntegral $ length ffills'
-      err = either (error . show) pure
-  decoded <- mapM (err . decodeASN1' DER) ffills'
-  pure $ thresholdFingerprintFromAsns t (decoded ++ ((:[]) <$> conds))
+verifyThreshold :: IsCondition c => (Word16 -> [c] -> c) -> Verify c -> ParseASN1 c
+verifyThreshold construct v = do
+  ffills <- onNextContainer (Container Context 0) $ getMany $ verifyPoly v
+  conds <- onNextContainer (Container Context 1) $ getMany parseAnon
+  let t = fromIntegral $ length ffills
+  pure $ construct t (conds ++ ffills)
 
+
+-- TODO: This does not handle thresholds
+parseAnon :: IsCondition c => ParseASN1 c
+parseAnon = withContainerContext $ \tid -> do
+  elems <- (,) <$> getNext <*> getNext
+  case elems of
+    (Other Context 0 bs, Other Context 1 cost) -> do
+      pure $ anon tid bs 10
+    other -> throwParseError ("Not a valid condition body: " ++ show other)
 
 --------------------------------------------------------------------------------
 -- | ED25519-SHA256 Condition type
@@ -273,7 +273,7 @@ ed25519Fulfillment pk sig = encodeASN1' DER body
   where body = fiveBellsThingy (typeId ed25519Type) [toData pk, toData sig]
 
 
-verifyEd25519 :: Verify c -> ParseASN1 BS.ByteString
+verifyEd25519 :: IsCondition c => Verify c -> ParseASN1 c
 verifyEd25519 (Verify msg) = do
   elements <- (,) <$> getNext <*> getNext
   (pk, sig) <- case elements of
@@ -283,7 +283,7 @@ verifyEd25519 (Verify msg) = do
         either throwParseError return res
       _ -> fail "Ed25519 does not parse"
   if Ed2.verify pk msg sig
-     then pure $ ed25519Fingerprint pk
+     then pure $ anon 4 (ed25519Fingerprint pk) ed25519Cost
      else fail "Ed25519 does not validate"
 
 
@@ -304,12 +304,13 @@ preimageCost :: BS.ByteString -> Int
 preimageCost = BS.length 
 
 
-verifyPreimage :: Verify c -> ParseASN1 BS.ByteString
+verifyPreimage :: IsCondition c => Verify c -> ParseASN1 c
 verifyPreimage _ = do
   element <- getNext
   case element of 
-    (Other Context 0 preimage) -> pure $ sha256 preimage
+    (Other Context 0 preimage) -> pure $ anon 0 (sha256 preimage) (BS.length preimage)
     _                          -> throwParseError "Preimage does not parse"
+
 
 --------------------------------------------------------------------------------
 -- Utilities

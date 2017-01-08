@@ -20,6 +20,7 @@ import BigchainDB.Crypto
 import BigchainDB.Prelude
 
 import CryptoConditions.TestFiveBells
+import CryptoConditions.TestStandard
 
 
 main :: IO ()
@@ -28,6 +29,7 @@ main = defaultMain $ testGroup "Tests" [ apiTests
                                        , dslParserTests
                                        , dslSerializerTests
                                        , fiveBellsSuite
+                                       , standardTests
                                        ]
 
 

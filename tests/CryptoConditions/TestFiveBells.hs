@@ -10,24 +10,17 @@ import Control.Monad.Trans.Except
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import qualified Data.ByteArray as BA
 import Data.ASN1.Encoding 
 import Data.ASN1.BinaryEncoding
-import Data.ASN1.Types
 import Data.Aeson
 import Data.Quickson
 import Data.Maybe
 import Data.Monoid
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Base64 as B64
-import qualified Data.ByteString.Char8 as C8
 import qualified Data.Text as T
-import Data.Text.Encoding (decodeUtf8, encodeUtf8)
-
-import Lens.Micro
-import Lens.Micro.Aeson
+import Data.Text.Encoding (encodeUtf8)
 
 import System.IO.Unsafe
 
