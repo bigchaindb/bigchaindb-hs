@@ -20,7 +20,8 @@ standardTests = testGroup "testStandard"
   [ testCase "testFulfill" $ do
       let cond = Threshold 1 [preimageCondition "ah", ed2Alice]
           (Just ffill) = getFulfillment cond
-      verifyStandard "" ffill (getURI cond) @?= Passed
+          condUri = getURI <$> readStandardFulfillment "" ffill
+       in condUri @?= Right (getURI cond)
 
   ]
 

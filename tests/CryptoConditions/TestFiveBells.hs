@@ -18,7 +18,6 @@ import Data.Maybe
 import Data.Monoid
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
-import qualified Data.ByteString.Base64 as B64
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 
@@ -30,11 +29,10 @@ import Interledger.CryptoConditions.Encoding
 
 
 fiveBellsSuite :: TestTree
-fiveBellsSuite = testGroup "fiveBellsSuites"
+fiveBellsSuite = testGroup "fiveBells"
   [ testMinimalEd25519
   , testMinimalPreimage
   , testMinimalThreshold
-  , testHashing
   ]
 
 
@@ -64,13 +62,18 @@ compareASN1 :: BS.ByteString -> BS.ByteString -> IO ()
 compareASN1 a b = decodeASN1' DER a @?= decodeASN1' DER b
 
 
+testVerify :: T.Text -> BS.ByteString -> T.Text -> IO ()
+testVerify msg ffillment uri = do
+  let econd = readStandardFulfillment (encodeUtf8 msg) ffillment
+  getURI <$> econd @?= Right uri
+
+
 testMinimalEd25519 :: TestTree
 testMinimalEd25519 = testGroup f
   [ testCase "binary condition" $ encodeCondition cond @?= condBin
   , testCase "uri" $ getURI cond @?= condUri
   , testCase "fulfillment" $ getFulfillment cond @?= Just ffillment
-  , testCase "verify" $ do
-      verifyStandard (encodeUtf8 msg) ffillment condUri @?= Passed
+  , testCase "verify" $ testVerify msg ffillment condUri
   ]
   where
     f = "0004_test-minimal-ed25519.json"
@@ -88,8 +91,7 @@ testMinimalPreimage = testGroup f
   [ testCase "binary condition" $ encodeCondition cond @?= condBin
   , testCase "uri" $ getURI cond @?= condUri
   , testCase "fulfillment" $ getFulfillment cond @?= Just ffillment
-  , testCase "verify" $
-      verifyStandard (encodeUtf8 msg) ffillment condUri @?= Passed
+  , testCase "verify" $ testVerify msg ffillment condUri
   ]
   where
     f = "0000_test-minimal-preimage.json"
@@ -107,9 +109,7 @@ testMinimalThreshold = testGroup f
   , testCase "uri" $ getURI cond @?= condUri
   , testCase "fulfillment" $
       fromJust (getFulfillment cond) `compareASN1` ffillment
-  , testCase "verify" $ do
-      print $ decodeASN1' DER ffillment
-      verifyStandard (encodeUtf8 msg) ffillment condUri @?= Passed
+  , testCase "verify" $ testVerify msg ffillment condUri
   ]
   where
     f = "0002_test-minimal-threshold.json"
@@ -121,7 +121,3 @@ testMinimalThreshold = testGroup f
     (msg,condUri) = qu val "{message,conditionUri}"
     cond = Threshold t [preimageCondition preimage]
 
-
-testHashing = testCase "testHashing" $ do
-  let (Right a) = B64.decode "MDeABTIwMTY6gQMBAACiKaQngCBTViEV1bSU4j5JUXc9sM/i3+VV5+P/60Hk/XXK98FqgYEDAgAA"
-  verifyStandard "" a "" @?= Passed

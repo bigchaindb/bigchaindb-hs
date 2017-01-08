@@ -15,15 +15,14 @@ module Interledger.CryptoConditions.Standard
   , Condition(..)
   , ed25519Condition
   , fulfillEd25519
-  , verifyStandard
   , preimageCondition
+  , readStandardFulfillment
   ) where
 
 import qualified Crypto.PubKey.Ed25519 as Ed2
 
 import Data.ByteString as BS
 import Data.Word
-import Data.Text (Text)
 
 import Interledger.CryptoConditions.Impl as CCI
 
@@ -58,9 +57,9 @@ instance IsCondition Condition where
   getFulfillment (Anon _ _ _) = Nothing
   getSubtypes (Threshold _ subs) = thresholdSubtypes subs
   getSubtypes _ = mempty
-  verifyFf 0 = verifyPreimage
-  verifyFf 2 = verifyThreshold Threshold
-  verifyFf 4 = verifyEd25519
+  parseFulfillment 0 = verifyPreimage
+  parseFulfillment 2 = verifyThreshold Threshold
+  parseFulfillment 4 = verifyEd25519
   anon = Anon
 
 
@@ -81,5 +80,5 @@ fulfillEd25519 pk sig e@(Ed25519 pk' Nothing) =
 fulfillEd25519 _ _ c = c
 
 
-verifyStandard :: BS.ByteString -> BS.ByteString -> Text -> VerifyResult
-verifyStandard msg = verifyFulfillment (Verify msg :: Verify Condition)
+readStandardFulfillment :: Message -> Fulfillment -> Either String Condition
+readStandardFulfillment = readFulfillment

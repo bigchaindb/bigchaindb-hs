@@ -4,7 +4,6 @@ module Interledger.CryptoConditions.Encoding where
 
 
 import Crypto.Error (CryptoFailable(..))
-import qualified Crypto.PubKey.Ed25519 as Ed2
 
 import Data.ASN1.BinaryEncoding
 import Data.ASN1.BinaryEncoding.Raw
@@ -21,6 +20,7 @@ import Data.List (sortOn)
 import Data.Monoid
 import Data.Word
 
+import Debug.Trace
 
 b64EncodeStripped :: BS.ByteString -> BS.ByteString
 b64EncodeStripped bs =
@@ -57,44 +57,23 @@ asnSeq :: ASN1ConstructionType -> [ASN1] -> [ASN1]
 asnSeq c args = [Start c] ++ args ++ [End c]
 
 
-asnSequenceBS :: [BS.ByteString] -> BS.ByteString
-asnSequenceBS args =
-  let len = foldl (+) 0 $ BS.length <$> args
-      lenPacked = BS.pack $ putLength $ mkSmallestLength len
-   in "0" <> lenPacked <> BS.concat args
-
-
 fiveBellsThingy :: Integral i => i -> [BS.ByteString] -> [ASN1]
 fiveBellsThingy tid bs =
   let c = Container Context $ fromIntegral tid
    in Start c : [Other Context i s | (i,s) <- zip [0..] bs] ++ [End c]
 
 
-mkSmallestLength :: Int -> ASN1Length
-mkSmallestLength i
-  | i < 0x80  = LenShort i
-  | otherwise = LenLong (nbBytes i) i
-  where nbBytes nb = if nb > 255 then 1 + nbBytes (nb `div` 256) else 1
-
-
-putLength :: ASN1Length -> [Word8]
-putLength (LenShort i)
-    | i < 0 || i > 0x7f = error "putLength: short length is not between 0x0 and 0x80"
-    | otherwise         = [fromIntegral i]
-putLength (LenLong _ i)
-    | i < 0     = error "putLength: long length is negative"
-    | otherwise = lenbytes : lw
-        where
-            lw       = bytesOfUInt $ fromIntegral i
-            lenbytes = fromIntegral (length lw .|. 0x80)
-putLength (LenIndefinite) = [0x80]
-
-
 bytesOfUInt :: Integer -> [Word8]
 bytesOfUInt = reverse . list
-  where list i = if i <= 0xff
-                    then [fromIntegral i]
-                    else (fromIntegral i .&. 0xff) : list (i `shiftR` 8)
+  where list i | i <= 0xff = [fromIntegral i]
+               | otherwise = (fromIntegral i .&. 0xff)
+                             : list (i `shiftR` 8)
+
+
+uIntFromBytes :: [Word8] -> Integer
+uIntFromBytes ws =
+  let ns = zip (fromIntegral <$> reverse ws) [0..]
+   in foldl (\r (n,o) -> r .|. (n `shiftL` (o*8))) 0 ns
 
 
 parseASN1 :: BS.ByteString -> ParseASN1 a -> Either String a

@@ -59,7 +59,7 @@ import Debug.Trace
 --------------------------------------------------------------------------------
 -- | Class of things that are conditions
 --
-class (Show c) => IsCondition c where
+class Show c => IsCondition c where
   getCost :: c -> Int
   getType :: c -> ConditionType
   getFingerprint :: c -> BS.ByteString
@@ -67,11 +67,12 @@ class (Show c) => IsCondition c where
   getSubtypes :: c -> Set.Set ConditionType
   getURI :: c -> T.Text
   getURI = getConditionURI
-  verifyFf :: Int -> Verify c -> ParseASN1 c
+  parseFulfillment :: Int -> Message -> ParseASN1 c
   anon :: Int -> BS.ByteString -> Int -> c
 
 
-newtype Verify c = Verify BS.ByteString
+type Message = BS.ByteString
+type Fulfillment = BS.ByteString
 
 
 data VerifyResult = Passed | Failed String
@@ -111,19 +112,13 @@ getFulfillmentBase64 =
   fmap (decodeUtf8 . B64.encode) . getFulfillment
 
 
-verifyFulfillment :: IsCondition c => Verify c -> BS.ByteString
-                  -> T.Text -> VerifyResult
-verifyFulfillment v bs uri =
-  case parseASN1 bs (verifyPoly v) of
-       Left err -> Failed err
-       Right c ->
-         if getURI c == uri
-            then Passed
-            else Failed "fulfillment does not match"
+readFulfillment :: IsCondition c => Message -> Fulfillment
+                -> Either String c
+readFulfillment msg bs = parseASN1 bs (verifyPoly msg)
 
 
-verifyPoly :: IsCondition c => Verify c -> ParseASN1 c
-verifyPoly v = withContainerContext (flip verifyFf v)
+verifyPoly :: IsCondition c => Message -> ParseASN1 c
+verifyPoly msg = withContainerContext (flip parseFulfillment msg)
 
 
 withContainerContext :: (Int -> ParseASN1 a) -> ParseASN1 a
@@ -231,7 +226,8 @@ thresholdCost t subs =
    in sum largest + 1024 * length subs
 
 
-verifyThreshold :: IsCondition c => (Word16 -> [c] -> c) -> Verify c -> ParseASN1 c
+verifyThreshold :: IsCondition c => (Word16 -> [c] -> c) -> Message 
+                -> ParseASN1 c
 verifyThreshold construct v = do
   ffills <- onNextContainer (Container Context 0) $ getMany $ verifyPoly v
   conds <- onNextContainer (Container Context 1) $ getMany parseAnon
@@ -244,8 +240,9 @@ parseAnon :: IsCondition c => ParseASN1 c
 parseAnon = withContainerContext $ \tid -> do
   elems <- (,) <$> getNext <*> getNext
   case elems of
-    (Other Context 0 bs, Other Context 1 cost) -> do
-      pure $ anon tid bs 10
+    (Other Context 0 bs, Other Context 1 costbs) ->
+      let cost = fromIntegral $ uIntFromBytes $ BS.unpack costbs
+       in pure $ anon tid bs cost 
     other -> throwParseError ("Not a valid condition body: " ++ show other)
 
 --------------------------------------------------------------------------------
@@ -273,8 +270,8 @@ ed25519Fulfillment pk sig = encodeASN1' DER body
   where body = fiveBellsThingy (typeId ed25519Type) [toData pk, toData sig]
 
 
-verifyEd25519 :: IsCondition c => Verify c -> ParseASN1 c
-verifyEd25519 (Verify msg) = do
+verifyEd25519 :: IsCondition c => Message -> ParseASN1 c
+verifyEd25519 msg = do
   elements <- (,) <$> getNext <*> getNext
   (pk, sig) <- case elements of
       (Other Context 0 bspk, Other Context 1 bssig) -> do
@@ -304,7 +301,7 @@ preimageCost :: BS.ByteString -> Int
 preimageCost = BS.length 
 
 
-verifyPreimage :: IsCondition c => Verify c -> ParseASN1 c
+verifyPreimage :: IsCondition c => Message -> ParseASN1 c
 verifyPreimage _ = do
   element <- getNext
   case element of 
