@@ -53,8 +53,6 @@ import Data.Word
 
 import Interledger.CryptoConditions.Encoding
 
-import Debug.Trace
-
 
 --------------------------------------------------------------------------------
 -- | Class of things that are conditions
@@ -68,11 +66,12 @@ class Show c => IsCondition c where
   getURI :: c -> T.Text
   getURI = getConditionURI
   parseFulfillment :: Int -> Message -> ParseASN1 c
-  anon :: Int -> BS.ByteString -> Int -> c
+  anon :: Int -> BS.ByteString -> Int -> Set.Set Int -> c
 
 
 type Message = BS.ByteString
 type Fulfillment = BS.ByteString
+type Preimage = BS.ByteString
 
 
 data VerifyResult = Passed | Failed String
@@ -84,7 +83,7 @@ encodeConditionASN c =
   let ct = getType c
       fingerprint = getFingerprint c
       costBs = BS.pack $ bytesOfUInt $ fromIntegral $ getCost c
-      subtypes = "\a" <> (typeMask $ getSubtypes c)
+      subtypes = "\a" <> (typeMask $ Set.map typeId $ getSubtypes c)
       body = [fingerprint, costBs] ++
              if hasSubtypes ct then [subtypes] else []
    in fiveBellsThingy (typeId ct) body
@@ -133,6 +132,16 @@ withContainerContext fp = do
     other -> throwParseError ("Not a container context: " ++ show other)
 
 
+parseOther :: Int -> ParseASN1 BS.ByteString
+parseOther n = do
+  asn <- getNext
+  case asn of
+    (Other Context i bs) ->
+      if n == i then pure bs
+                else throwParseError $ "Invalid context id: " ++ show (n,i)
+    other                -> throwParseError "agh" -- TODO
+
+
 --------------------------------------------------------------------------------
 -- | Type of a condition
 --
@@ -161,12 +170,19 @@ typeNames :: Set.Set ConditionType -> T.Text
 typeNames = T.intercalate "," . map typeName . Set.toAscList
 
 
-typeMask :: Set.Set ConditionType -> BS.ByteString
+-- This should figure prepend the range itself.
+typeMask :: Set.Set Int -> BS.ByteString
 typeMask cts =
   let op i = shiftL 1 (7 - mod i 8)
-      bits = Set.map (op . typeId) cts
+      bits = Set.map op cts
       mask = foldl (.|.) 0 bits :: Int
    in BS.singleton $ fromIntegral mask
+
+
+unTypeMask :: BS.ByteString -> Set.Set Int
+unTypeMask maskbs = Set.fromList $
+  let [n, w] = fromIntegral <$> BS.unpack maskbs
+   in filter (\i -> 0 /= w .&. (shiftL 1 (n-i))) [0..n]
 
 
 --------------------------------------------------------------------------------
@@ -226,24 +242,24 @@ thresholdCost t subs =
    in sum largest + 1024 * length subs
 
 
-verifyThreshold :: IsCondition c => (Word16 -> [c] -> c) -> Message 
+parseThreshold :: IsCondition c => (Word16 -> [c] -> c) -> Message 
                 -> ParseASN1 c
-verifyThreshold construct v = do
+parseThreshold construct v = do
   ffills <- onNextContainer (Container Context 0) $ getMany $ verifyPoly v
-  conds <- onNextContainer (Container Context 1) $ getMany parseAnon
+  conds <- onNextContainer (Container Context 1) $ getMany parseCondition
   let t = fromIntegral $ length ffills
   pure $ construct t (conds ++ ffills)
 
 
--- TODO: This does not handle thresholds
-parseAnon :: IsCondition c => ParseASN1 c
-parseAnon = withContainerContext $ \tid -> do
-  elems <- (,) <$> getNext <*> getNext
-  case elems of
-    (Other Context 0 bs, Other Context 1 costbs) ->
-      let cost = fromIntegral $ uIntFromBytes $ BS.unpack costbs
-       in pure $ anon tid bs cost 
-    other -> throwParseError ("Not a valid condition body: " ++ show other)
+parseCondition :: IsCondition c => ParseASN1 c
+parseCondition = withContainerContext $ \tid -> do
+  (bs, costbs) <- (,) <$> parseOther 0 <*> parseOther 1
+  let cost = fromIntegral $ uIntFromBytes $ BS.unpack costbs
+      condPart = anon tid bs cost
+  subtypes <- if hasSubtypes $ getType (condPart undefined)
+                 then unTypeMask <$> parseOther 2 else pure mempty
+  pure $ condPart subtypes
+
 
 --------------------------------------------------------------------------------
 -- | ED25519-SHA256 Condition type
@@ -270,17 +286,14 @@ ed25519Fulfillment pk sig = encodeASN1' DER body
   where body = fiveBellsThingy (typeId ed25519Type) [toData pk, toData sig]
 
 
-verifyEd25519 :: IsCondition c => Message -> ParseASN1 c
-verifyEd25519 msg = do
-  elements <- (,) <$> getNext <*> getNext
-  (pk, sig) <- case elements of
-      (Other Context 0 bspk, Other Context 1 bssig) -> do
-        let res = (,) <$> toKey (Ed2.publicKey bspk)
-                      <*> toKey (Ed2.signature bssig)
-        either throwParseError return res
-      _ -> fail "Ed25519 does not parse"
+parseEd25519 :: (Ed2.PublicKey -> Ed2.Signature -> c) -> Message -> ParseASN1 c
+parseEd25519 construct msg = do
+  (bspk, bssig) <- (,) <$> parseOther 0 <*> parseOther 1
+  (pk,sig) <- either throwParseError pure $
+    (,) <$> toKey (Ed2.publicKey bspk)
+        <*> toKey (Ed2.signature bssig)
   if Ed2.verify pk msg sig
-     then pure $ anon 4 (ed25519Fingerprint pk) ed25519Cost
+     then pure $ construct pk sig
      else fail "Ed25519 does not validate"
 
 
@@ -301,12 +314,8 @@ preimageCost :: BS.ByteString -> Int
 preimageCost = BS.length 
 
 
-verifyPreimage :: IsCondition c => Message -> ParseASN1 c
-verifyPreimage _ = do
-  element <- getNext
-  case element of 
-    (Other Context 0 preimage) -> pure $ anon 0 (sha256 preimage) (BS.length preimage)
-    _                          -> throwParseError "Preimage does not parse"
+parsePreimage :: (Preimage -> c) -> Message -> ParseASN1 c
+parsePreimage construct _ = construct <$> parseOther 0
 
 
 --------------------------------------------------------------------------------
