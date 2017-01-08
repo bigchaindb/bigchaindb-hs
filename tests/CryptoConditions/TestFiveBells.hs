@@ -16,6 +16,7 @@ import Data.ASN1.BinaryEncoding
 import Data.ASN1.Types
 import Data.Aeson
 import Data.Quickson
+import Data.Maybe
 import Data.Monoid
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
@@ -39,16 +40,15 @@ fiveBellsSuite :: TestTree
 fiveBellsSuite = testGroup "fiveBellsSuites"
   [ testMinimalEd25519
   , testMinimalPreimage
-  --, testBasicThreshold
-  --, testHashing
+  , testMinimalThreshold
+  , testHashing
   ]
 
 
 suiteJson :: FromJSON a => FilePath -> a
 suiteJson file = unsafePerformIO $ do
   let path = "ext/five-bells-condition/testsuite/valid/" <> file
-  (Just val) <- decodeStrict <$> BS.readFile path
-  pure val
+  fromJust . decodeStrict <$> BS.readFile path
 
 
 fromB16 :: T.Text -> BS.ByteString    
@@ -67,12 +67,16 @@ qu :: FromJSON a => Value -> BS.ByteString -> a
 qu val q = either error id $ quicksonParse q >>= flip quicksonExecute val
 
 
+compareASN1 :: BS.ByteString -> BS.ByteString -> IO ()
+compareASN1 a b = decodeASN1' DER a @?= decodeASN1' DER b
+
+
 testMinimalEd25519 :: TestTree
 testMinimalEd25519 = testGroup f
   [ testCase "binary condition" $ encodeCondition cond @?= condBin
   , testCase "uri" $ getURI cond @?= condUri
   , testCase "fulfillment" $ getFulfillment cond @?= Just ffillment
-  , testCase "verify" $
+  , testCase "verify" $ do
       verifyStandard (encodeUtf8 msg) ffillment condUri @?= Passed
   ]
   where
@@ -104,26 +108,27 @@ testMinimalPreimage = testGroup f
     cond = preimageCondition preimage
 
 
---testBasicThreshold :: TestTree
---testBasicThreshold = testGroup f
---  [ testCase "binary condition" $ encodeCondition cond @?= condBin 
---  ]
---  where
---    f = "0008_test-basic-threshold.json"
---    val = suiteJson f :: Value
---    threshold = qu val "{json:{threshold}}"
---    cond = Threshold threshold
---      [ ]
+testMinimalThreshold :: TestTree
+testMinimalThreshold = testGroup f
+  [ testCase "binary condition" $ encodeCondition cond `compareASN1` condBin
+  , testCase "uri" $ getURI cond @?= condUri
+  , testCase "fulfillment" $
+      fromJust (getFulfillment cond) `compareASN1` ffillment
+  , testCase "verify" $ do
+      print $ decodeASN1' DER ffillment
+      verifyStandard (encodeUtf8 msg) ffillment condUri @?= Passed
+  ]
+  where
+    f = "0002_test-minimal-threshold.json"
+    val = suiteJson f
+    t = qu val "{json:{threshold}}"
+    [preimage] = encodeUtf8 <$> qu val "{json:{subfulfillments:[{preimage}]}}"
+    condBin = fromB16 $ qu val "{conditionBinary}"
+    ffillment = fromB16 $ qu val "{fulfillment}"
+    (msg,condUri) = qu val "{message,conditionUri}"
+    cond = Threshold t [preimageCondition preimage]
 
 
 testHashing = testCase "testHashing" $ do
-  let pk = fromB16 "ec172b93ad5e563bf4932c70e1245034c35467ef2efd4d64ebf819683467e2bf"
-  print ""
-  print pk
-  let (Right asn) = B64.decode "MCKAIOwXK5OtXlY79JMscOEkUDTDVGfvLv1NZOv4GWg0Z+K/"
-  print $ decodeASN1 DER $ BL.fromStrict asn
-  let fing = fromB64 "U1YhFdW0lOI-SVF3PbDP4t_lVefj_-tB5P11yvfBaoE"
-  print fing
-  print $ sha256 asn
-
-  
+  let (Right a) = B64.decode "MDeABTIwMTY6gQMBAACiKaQngCBTViEV1bSU4j5JUXc9sM/i3+VV5+P/60Hk/XXK98FqgYEDAgAA"
+  verifyStandard "" a "" @?= Passed

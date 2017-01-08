@@ -36,7 +36,6 @@ import qualified Crypto.PubKey.Ed25519 as Ed2
 
 import Data.ASN1.BinaryEncoding
 import Data.ASN1.BinaryEncoding.Raw
---import Data.ASN1.BitArray
 import Data.ASN1.Encoding
 import Data.ASN1.Parse
 import Data.ASN1.Types
@@ -45,7 +44,7 @@ import Data.Bits
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64.URL as B64
-import Data.List ((\\), sortOn)
+import Data.List (sortOn)
 import Data.Maybe
 import Data.Monoid
 import qualified Data.Set as Set
@@ -55,6 +54,7 @@ import Data.Word
 
 import Interledger.CryptoConditions.Encoding
 
+import Debug.Trace
 
 --------------------------------------------------------------------------------
 -- | Class of things that are conditions
@@ -83,11 +83,10 @@ encodeConditionASN c =
   let ct = getType c
       fingerprint = getFingerprint c
       costBs = BS.pack $ bytesOfUInt $ fromIntegral $ getCost c
-      --mask = typeMask $ getSubtypes c
-      --mid = if hasSubtypes ct
-      --         then [BitString $ toBitArray mask 0]
-      --         else []
-   in fiveBellsThingy (typeId ct) [fingerprint, costBs]
+      subtypes = "\a" <> (typeMask $ getSubtypes c)
+      body = [fingerprint, costBs] ++
+             if hasSubtypes ct then [subtypes] else []
+   in fiveBellsThingy (typeId ct) body
 
 
 encodeCondition :: IsCondition c => c -> BS.ByteString
@@ -176,7 +175,8 @@ typeNames = T.intercalate "," . map typeName . Set.toAscList
 
 typeMask :: Set.Set ConditionType -> BS.ByteString
 typeMask cts =
-  let bits = Set.map ((2^) . typeId) cts
+  let op i = shiftL 1 (7 - mod i 8)
+      bits = Set.map (op . typeId) cts
       mask = foldl (.|.) 0 bits :: Int
    in BS.singleton $ fromIntegral mask
 
@@ -195,12 +195,12 @@ thresholdFulfillment t subs =
       withFf = zip subs (getFulfillment <$> subs)
       byCost = sortOn ffillCost withFf
       ffills = take ti $ catMaybes $ snd <$> byCost
-      conds = encodeCondition . fst <$> drop ti byCost
-      body = asnSequenceBS [ asnSequenceBS ffills
-                           , asnSequenceBS conds
-                           ]
-      asn = asnChoiceBS (typeId thresholdType) body
-      encoded = encodeASN1' DER [asn]
+      conds = encodeConditionASN . fst <$> drop ti byCost
+      ffills' = either (error . show) id . decodeASN1' DER <$> ffills
+      asn = asnSeq (Container Context 2) $
+              asnSeq (Container Context 0) (concat ffills') ++
+              asnSeq (Container Context 1) (concat conds)
+      encoded = encodeASN1' DER asn
    in if length ffills == ti then Just encoded else Nothing
   where
     -- order by has ffill then cost of ffill
@@ -210,23 +210,25 @@ thresholdFulfillment t subs =
 
 thresholdFingerprint :: IsCondition c => Word16 -> [c] -> BS.ByteString
 thresholdFingerprint t subs =
-  thresholdFingerprintFromBins t $ encodeCondition <$> subs
+  let asns = encodeConditionASN <$> subs
+   in thresholdFingerprintFromAsns t asns
 
 
-thresholdFingerprintFromBins :: Word16 -> [BS.ByteString] -> BS.ByteString
-thresholdFingerprintFromBins t subs = 
-  let subs' = x690Sort subs
-      encoded = asnSequenceBS $
-        [ encodeASN1' DER [IntVal $ fromIntegral t]
-        , asnSequenceBS subs'
-        ]
-   in BS.pack $ BA.unpack (hash encoded :: Digest SHA256)
+thresholdFingerprintFromAsns :: Word16 -> [[ASN1]] -> BS.ByteString
+thresholdFingerprintFromAsns t asns = 
+  let subs' = x690SortAsn asns
+      c = Container Context 1
+      asn = asnSequence $
+        [ Other Context 0 (BS.pack $ bytesOfUInt $ fromIntegral t)
+        , Start c
+        ] ++ concat subs' ++ [End c]
+   in sha256 $ encodeASN1' DER asn
 
 
 thresholdSubtypes :: IsCondition c => [c] -> Set.Set ConditionType
 thresholdSubtypes subs =
   let cts = Set.fromList (getType <$> subs)
-      all' = Set.unions (cts:(getSubtypes <$> subs))
+      all' = Set.unions (cts : (getSubtypes <$> subs))
    in Set.delete thresholdType all'
 
 
@@ -237,15 +239,13 @@ thresholdCost t subs =
 
 
 verifyThreshold :: IsCondition c => Verify c -> ParseASN1 BS.ByteString
-verifyThreshold v =
-  onNextContainer Sequence $ do
-    ffilled <- onNextContainer Sequence $ getMany $ verifyPoly v
-    conds <- onNextContainer Sequence $ getMany $
-      encodeASN1' DER . (:[]) <$> getNext
-    let t = fromIntegral $ length ffilled
-    if ffilled \\ conds /= []
-       then throwParseError "Threshold does not satisfy"
-       else pure $ thresholdFingerprintFromBins t conds
+verifyThreshold v = do
+  ffills' <- onNextContainer (Container Context 0) $ getMany $ verifyPoly v
+  conds <- onNextContainer (Container Context 1) $ getMany getNext
+  let t = fromIntegral $ length ffills'
+      err = either (error . show) pure
+  decoded <- mapM (err . decodeASN1' DER) ffills'
+  pure $ thresholdFingerprintFromAsns t (decoded ++ ((:[]) <$> conds))
 
 
 --------------------------------------------------------------------------------

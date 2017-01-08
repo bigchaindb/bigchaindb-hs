@@ -40,8 +40,8 @@ x690Sort :: [BS.ByteString] -> [BS.ByteString]
 x690Sort = sortOn (\bs -> (BS.length bs, bs))
 
 
-asnChoice :: Int -> [ASN1] -> ASN1
-asnChoice tid body = asnChoiceBS tid $ encodeASN1' DER body
+x690SortAsn :: [[ASN1]] -> [[ASN1]]
+x690SortAsn = sortOn (\a -> let b = encodeASN1' DER a in (BS.length b, b))
 
 
 asnChoice2 :: Int -> [ASN1] -> [ASN1]
@@ -49,15 +49,12 @@ asnChoice2 tid body = let c = Container Context tid
                        in Start c : body ++ [End c]
 
 
-asnChoiceBS :: Int -> BS.ByteString -> ASN1
-asnChoiceBS = Other Private
-
 asnSequence :: [ASN1] -> [ASN1]
 asnSequence args = [Start Sequence] ++ args ++ [End Sequence]
---asnSequence items = toByteString $ Header header : items
---  where
---    header = ASN1Header Universal 0x10 True len
---    len = mkSmallestLength 7 -- $ length items
+
+
+asnSeq :: ASN1ConstructionType -> [ASN1] -> [ASN1]
+asnSeq c args = [Start c] ++ args ++ [End c]
 
 
 asnSequenceBS :: [BS.ByteString] -> BS.ByteString

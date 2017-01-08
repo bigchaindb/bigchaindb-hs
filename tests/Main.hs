@@ -19,15 +19,15 @@ import BigchainDB.CryptoConditions
 import BigchainDB.Crypto
 import BigchainDB.Prelude
 
-import TestCryptoConditions
+import CryptoConditions.TestFiveBells
 
 
 main :: IO ()
 main = defaultMain $ testGroup "Tests" [ apiTests
                                        , txTests
-                                       , cryptoConditionsTests
                                        , dslParserTests
                                        , dslSerializerTests
+                                       , fiveBellsSuite
                                        ]
 
 
@@ -54,7 +54,7 @@ txTests = testGroup "Test Transaction ID validation"
      testCase "tx-wrong-id-fails" $ do
          tx <- create
          res <- validateTx $ tx & key "id" .~ badId
-         res @?= "{\"error\":\"Error in $: id incorrect\"}"
+         res @?= "{\"error\":\"Error in $: Txid mismatch\"}"
   ]
   where
     badId = "FFFd1a44abcf0a18b7aec2d406c11ed0cb0bd371847145be7822c76077ca5514"
