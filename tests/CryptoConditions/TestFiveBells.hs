@@ -34,6 +34,7 @@ fiveBellsSuite = testGroup "fiveBells"
   , testMinimalPreimage
   , testMinimalThreshold
   , testMinimalPrefix
+  , testBasicPrefix
   ]
 
 
@@ -142,3 +143,24 @@ testMinimalPrefix = testGroup f
     (msg,condUri) = qu val "{message,conditionUri}"
     cond = Prefix prefix maxMessageLength (preimageCondition preimage)
 
+
+testBasicPrefix :: TestTree
+testBasicPrefix = testGroup f
+  [ testCase "binary condition" $ encodeCondition cond `compareASN1` condBin
+  , testCase "uri" $ getURI cond @?= condUri
+  , testCase "fulfillment" $
+      fromJust (getFulfillment cond) `compareASN1` ffillment
+  , testCase "verify" $ testVerify msg ffillment condUri
+  ]
+  where
+    f = "0006_test-basic-prefix.json"
+    val = suiteJson f
+    maxMessageLength = qu val "{json:{maxMessageLength}}"
+    prefix = fromB64 $ qu val "{json:{prefix}}"
+    condBin = fromB16 $ qu val "{conditionBinary}"
+    ffillment = fromB16 $ qu val "{fulfillment}"
+    (msg,condUri) = qu val "{message,conditionUri}"
+    (PK pub) = fromB64Key $ qu val "{json:{subfulfillment:{publicKey}}}" 
+    (Sig sig) = fromB64Key $ qu val "{json:{subfulfillment:{signature}}}"
+    subcond = Ed25519 pub (Just sig)
+    cond = Prefix prefix maxMessageLength subcond
