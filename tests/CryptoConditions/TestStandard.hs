@@ -18,13 +18,12 @@ import Interledger.CryptoConditions.Standard
 standardTests :: TestTree
 standardTests = testGroup "testStandard"
   [ testCase "testFulfill" $ do
-      let cond = Threshold 1 [preimageCondition "ah", ed2Alice]
+      let cond = Threshold 1 [Preimage "ah", ed2Alice]
           (Just ffill) = getFulfillment cond
           condUri = getURI <$> readStandardFulfillment "" ffill
        in condUri @?= Right (getURI cond)
 
   ]
-
 
 
 ed2Alice, ed2Bob :: Condition

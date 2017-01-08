@@ -14,8 +14,8 @@ module Interledger.CryptoConditions.Standard
   ( module CCI
   , Condition(..)
   , ed25519Condition
-  , fulfillEd25519
   , preimageCondition
+  , fulfillEd25519
   , readStandardFulfillment
   ) where
 
@@ -30,7 +30,7 @@ import Interledger.CryptoConditions.Impl as CCI
 data Condition =
     Threshold Word16 [Condition]
   | Ed25519 Ed2.PublicKey (Maybe Ed2.Signature)
-  | Preimage BS.ByteString (Maybe BS.ByteString)
+  | Preimage BS.ByteString
   | Anon Int BS.ByteString Int
   deriving (Show, Eq)
 
@@ -41,19 +41,18 @@ instance IsCondition Condition where
   getType (Anon 4 _ _) = ed25519Type
   getType (Threshold _ _) = thresholdType
   getType (Ed25519 _ _) = ed25519Type
-  getType (Preimage _ _) = preimageType
+  getType (Preimage _) = preimageType
   getCost (Threshold t subs) = thresholdCost t subs
   getCost (Ed25519 _ _) = ed25519Cost
-  getCost (Preimage _ (Just pre)) = preimageCost pre
-  getCost (Preimage _ _) = error "time to refactor!"
+  getCost (Preimage pre) = preimageCost pre
   getCost (Anon _ _ c) = c
   getFingerprint (Threshold t subs) = thresholdFingerprint t subs
   getFingerprint (Ed25519 pk _) = ed25519Fingerprint pk
-  getFingerprint (Preimage hash _) = hash
+  getFingerprint (Preimage pre) = sha256 pre
   getFingerprint (Anon _ fp _) = fp
   getFulfillment (Threshold t subs) = thresholdFulfillment t subs
   getFulfillment (Ed25519 pk msig) = ed25519Fulfillment pk <$> msig
-  getFulfillment (Preimage _ mpre) = preimageFulfillment <$> mpre
+  getFulfillment (Preimage pre) = Just $ preimageFulfillment pre
   getFulfillment (Anon _ _ _) = Nothing
   getSubtypes (Threshold _ subs) = thresholdSubtypes subs
   getSubtypes _ = mempty
@@ -63,12 +62,12 @@ instance IsCondition Condition where
   anon = Anon
 
 
+preimageCondition :: BS.ByteString -> Condition
+preimageCondition = Preimage
+
+
 ed25519Condition :: Ed2.PublicKey -> Condition
 ed25519Condition pk = Ed25519 pk Nothing
-
-
-preimageCondition :: BS.ByteString -> Condition
-preimageCondition pre = Preimage (sha256 pre) (Just pre)
 
 
 fulfillEd25519 :: Ed2.PublicKey -> Ed2.Signature
