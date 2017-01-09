@@ -28,4 +28,4 @@ start = time.time()
 for i in xrange(repeat):
     out = call(sys.argv[1], sys.argv[2])
 print json.dumps(out, indent=2)
-print >>sys.stderr, "%.3f" % (time.time() - start)
+print >>sys.stderr, "%.2fms" % ((time.time() - start) / repeat * 1000)

@@ -55,7 +55,6 @@ import Data.Word
 
 import Interledger.CryptoConditions.Encoding
 
-
 --------------------------------------------------------------------------------
 -- | Class of things that are conditions
 --
@@ -79,6 +78,10 @@ type Prefix = BS.ByteString
 type Fingerprint = BS.ByteString
 
 
+encodeCondition :: IsCondition c => c -> BS.ByteString
+encodeCondition = encodeASN1' DER . encodeConditionASN
+
+
 encodeConditionASN :: IsCondition c => c -> [ASN1]
 encodeConditionASN c =
   let ct = getType c
@@ -87,11 +90,7 @@ encodeConditionASN c =
       subtypes = "\a" <> (typeMask $ Set.map typeId $ getSubtypes c)
       body = [fingerprint, costBs] ++
              if hasSubtypes ct then [subtypes] else []
-   in fiveBellsThingy (typeId ct) body
-
-
-encodeCondition :: IsCondition c => c -> BS.ByteString
-encodeCondition = encodeASN1' DER . encodeConditionASN
+   in fiveBellsContainer (typeId ct) body
 
 
 getConditionURI :: IsCondition c => c -> T.Text
@@ -119,28 +118,6 @@ readFulfillment msg bs = parseASN1 bs (verifyPoly msg)
 
 verifyPoly :: IsCondition c => Message -> ParseASN1 c
 verifyPoly msg = withContainerContext (flip parseFulfillment msg)
-
-
-withContainerContext :: (Int -> ParseASN1 a) -> ParseASN1 a
-withContainerContext fp = do
-  asn <- getNext
-  case asn of
-    (Start c@(Container Context tid)) -> do
-      res <- fp tid
-      end <- getNext
-      if end /= End c then throwParseError "Failed parsing end"
-                      else pure res
-    other -> throwParseError ("Not a container context: " ++ show other)
-
-
-parseOther :: Int -> ParseASN1 BS.ByteString
-parseOther n = do
-  asn <- getNext
-  case asn of
-    (Other Context i bs) ->
-      if n == i then pure bs
-                else throwParseError $ "Invalid context id: " ++ show (n,i)
-    other                -> throwParseError "agh" -- TODO
 
 
 --------------------------------------------------------------------------------
@@ -196,7 +173,7 @@ preimageType = CT 0 "preimage-sha-256" False "sha-256"
 
 preimageFulfillment :: BS.ByteString -> Fulfillment
 preimageFulfillment pre = encodeASN1' DER body
-  where body = fiveBellsThingy (typeId preimageType) [pre]
+  where body = fiveBellsContainer (typeId preimageType) [pre]
 
 
 preimageCost :: BS.ByteString -> Int
@@ -236,7 +213,7 @@ prefixFingerprint pre mml cond = sha256 body
 
 
 prefixFulfillment :: IsCondition c => Prefix -> Int -> c -> Maybe Fulfillment
-prefixFulfillment pre mml cond = 
+prefixFulfillment pre mml cond =
   let mmlbs = BS.pack $ bytesOfUInt $ fromIntegral mml
       msubffill = getFulfillment cond
       getAsn subffill =
@@ -302,9 +279,9 @@ thresholdFingerprint t subs =
 
 thresholdFingerprintFromAsns :: Word16 -> [[ASN1]] -> Fingerprint
 thresholdFingerprintFromAsns t asns = 
-  let subs' = x690SortAsn asns
+  let subs' = x690SortAsn asns -- TODO: encode only once?
       c = Container Context 1
-      asn = asnSequence $
+      asn = asnSeq Sequence $
         [ Other Context 0 (BS.pack $ bytesOfUInt $ fromIntegral t)
         , Start c
         ] ++ concat subs' ++ [End c]
@@ -338,7 +315,7 @@ parseCondition = withContainerContext $ \tid -> do
   (bs, costbs) <- (,) <$> parseOther 0 <*> parseOther 1
   let cost = fromIntegral $ uIntFromBytes $ BS.unpack costbs
       condPart = anon tid bs cost
-  subtypes <- if hasSubtypes $ getType (condPart undefined)
+  subtypes <- if hasSubtypes $ getType $ condPart mempty
                  then unTypeMask <$> parseOther 2 else pure mempty
   pure $ condPart subtypes
 
@@ -365,7 +342,7 @@ ed25519Fingerprint pk = sha256 body
 
 ed25519Fulfillment :: Ed2.PublicKey -> Ed2.Signature -> Fulfillment
 ed25519Fulfillment pk sig = encodeASN1' DER body
-  where body = fiveBellsThingy (typeId ed25519Type) [toData pk, toData sig]
+  where body = fiveBellsContainer (typeId ed25519Type) [toData pk, toData sig]
 
 
 parseEd25519 :: (Ed2.PublicKey -> Ed2.Signature -> c) -> Message -> ParseASN1 c
@@ -385,3 +362,26 @@ parseEd25519 construct msg = do
 
 sha256 :: BA.ByteArrayAccess a => a -> BS.ByteString
 sha256 a = BS.pack $ BA.unpack $ (hash a :: Digest SHA256)
+
+
+withContainerContext :: (Int -> ParseASN1 a) -> ParseASN1 a
+withContainerContext fp = do
+  asn <- getNext
+  case asn of
+    (Start c@(Container Context tid)) -> do
+      res <- fp tid
+      end <- getNext
+      if end /= End c then throwParseError "Failed parsing end"
+                      else pure res
+    other -> throwParseError ("Not a container context: " ++ show other)
+
+
+parseOther :: Int -> ParseASN1 BS.ByteString
+parseOther n = do
+  asn <- getNext
+  case asn of
+    (Other Context i bs) ->
+      if n == i then pure bs
+                else throwParseError $ "Invalid context id: " ++ show (n,i)
+    other                -> throwParseError "agh" -- TODO
+

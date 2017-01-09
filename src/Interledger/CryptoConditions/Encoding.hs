@@ -1,6 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Interledger.CryptoConditions.Encoding where
+module Interledger.CryptoConditions.Encoding
+  ( x690SortAsn
+  , b64EncodeStripped
+  , b64DecodeStripped
+  , asnSeq
+  , bytesOfUInt
+  , uIntFromBytes
+  , fiveBellsContainer
+  , toData
+  , toKey
+  , parseASN1
+  ) where
 
 
 import Crypto.Error (CryptoFailable(..))
@@ -20,7 +31,6 @@ import Data.List (sortOn)
 import Data.Monoid
 import Data.Word
 
-import Debug.Trace
 
 b64EncodeStripped :: BS.ByteString -> BS.ByteString
 b64EncodeStripped bs =
@@ -36,31 +46,18 @@ b64DecodeStripped bs =
    in B64.decode $ bs <> C8.replicate n '='
 
 
-x690Sort :: [BS.ByteString] -> [BS.ByteString]
-x690Sort = sortOn (\bs -> (BS.length bs, bs))
-
-
 x690SortAsn :: [[ASN1]] -> [[ASN1]]
 x690SortAsn = sortOn (\a -> let b = encodeASN1' DER a in (BS.length b, b))
-
-
-asnChoice2 :: Int -> [ASN1] -> [ASN1]
-asnChoice2 tid body = let c = Container Context tid
-                       in Start c : body ++ [End c]
-
-
-asnSequence :: [ASN1] -> [ASN1]
-asnSequence args = [Start Sequence] ++ args ++ [End Sequence]
 
 
 asnSeq :: ASN1ConstructionType -> [ASN1] -> [ASN1]
 asnSeq c args = [Start c] ++ args ++ [End c]
 
 
-fiveBellsThingy :: Integral i => i -> [BS.ByteString] -> [ASN1]
-fiveBellsThingy tid bs =
+fiveBellsContainer :: Integral i => i -> [BS.ByteString] -> [ASN1]
+fiveBellsContainer tid bs =
   let c = Container Context $ fromIntegral tid
-   in Start c : [Other Context i s | (i,s) <- zip [0..] bs] ++ [End c]
+   in asnSeq c [Other Context i s | (i,s) <- zip [0..] bs]
 
 
 bytesOfUInt :: Integer -> [Word8]

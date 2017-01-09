@@ -58,6 +58,8 @@ library
 
 
 executable bigchaindb-hs
+  if flag(so)
+    buildable:         False
   hs-source-dirs:      src-exec
   main-is:             Main.hs
   Build-depends:       base,
