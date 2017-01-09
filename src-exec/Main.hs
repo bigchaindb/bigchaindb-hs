@@ -6,7 +6,7 @@ import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy.Char8 as C8L
 
 import Data.Aeson
-import Data.Aeson.Types hiding (Parser(..))
+import Data.Aeson.Types hiding (Parser)
 import Data.Aeson.Encode.Pretty
 
 import Data.Maybe
@@ -29,18 +29,20 @@ parseCmd = subparser $
 
 
 parseOpts :: ParserInfo (Bool, IO C8.ByteString)
-parseOpts = info ((,) <$> pretty <*> parseCmd) fullDesc
+parseOpts = info (parser <**> helper) desc
   where
+    parser = (,) <$> pretty <*> parseCmd
     pretty = switch (long "pretty" <> help "Pretty print output")
+    desc = fullDesc <> progDesc "BigchainDB Clientside API"
 
 
 main :: IO ()
 main = do
   (pretty, act) <- execParser parseOpts
   rjson <- C8L.fromStrict <$> act
-  let (Just value) = decode rjson
-      out = if pretty then encodePretty' pconf value else rjson
-      err = parseMaybe (\o -> o .: "error") value :: Maybe String
+  let (Just val) = decode rjson
+      out = if pretty then encodePretty' pconf val else rjson
+      err = parseMaybe (\o -> o .: "error") val :: Maybe String
   when (isJust err) $ C8L.hPutStrLn stderr out >> exitFailure
   C8L.putStrLn out
   where
