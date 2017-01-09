@@ -10,13 +10,13 @@
 -- This approach to Crypto Conditions in Haskell has the goals:
 --
 -- * Simple to understand and work with
--- * Easily extensible with custom condition types
+-- * Easily extensible
 --
--- The bottleneck to achieving these goals is polymorphism; Haskell does not
+-- The bottleneck to achieving these goals is extensibility; Haskell does not
 -- support dynamic dispatch like OOP languages, and runtime type casting
 -- in Haskell is very unnatural and somewhat unsafe.
 --
--- The solution is to decouple the polymorphism from the implementation,
+-- The solution is to decouple the condition type from the implementation,
 -- such that the core algorithms and serialization can work with instances
 -- of an "IsCondition" class, and a polymorphic data type can be implemented
 -- separately to support the desired condition types and behaviours.
