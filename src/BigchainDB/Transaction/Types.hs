@@ -109,7 +109,7 @@ txidAndJson (Tx op asset inputs outputs metadata) =
       inputsNoSigs = (\(Input f _) -> Input f Null) <$> inputs
       txNoSigs = object (("inputs" .= inputsNoSigs) : common)
       txid = Txid $ T.pack $ sha3 $ toStrict $ encodePretty' determ txNoSigs
-      determ = defConfig { confCompare = compare, confIndent=Spaces 0 }
+      determ = defConfig {confCompare=compare, confIndent=Spaces 0}
    in (txid, tx)
 
 

@@ -1,11 +1,9 @@
 resolver: lts-7.14
 packages:
     - .
-    - location:
-        git: git@github.com:libscott/quickson.git
-        commit: dabbb3a3640e1813fa7063ea966d4bcc35789d3a
 extra-deps:
     - base58-bytestring-0.1.0
+    - quickson-0.3
 
 # Override default flag values for local packages and extra-deps
 flags: {}

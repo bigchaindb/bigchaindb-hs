@@ -69,7 +69,6 @@ executable bigchaindb-hs
                        aeson,
                        aeson-pretty
 
-
 test-suite test
   type:                exitcode-stdio-1.0
   main-is:             Main.hs
