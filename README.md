@@ -1,6 +1,6 @@
 # Bigchaindb-hs
 
-BigchainDB client tools for creating and signing transactions
+[BigchainDB](https://github.com/bigchaindb/bigchaindb) client tools for creating and signing transactions.
 
 Work in progress!
 
