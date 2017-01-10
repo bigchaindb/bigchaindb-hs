@@ -6,7 +6,7 @@ Targeting spec: draft-thomas-crypto-conditions-02 of December 20, 2016
 
 Supports all standard condition types except RSA.
 
-Needs more testing.
+Needs more testing. [Some tests](../../tests/CryptoConditions/) exist.
 
 ## Design
 
@@ -24,7 +24,7 @@ such that the core algorithms and serialization can work with instances
 of an "IsCondition" class, and a polymorphic data type can be implemented
 separately to support the desired condition types and behaviours.
 
-The module _Interledger/CryptoConditions.hs_ supports the standard
+The module [CryptoCondition.hs](./CryptoConditions.hs) supports the standard
 condition types, library authors wishing to extend CryptoConditions
 should copy and paste this file into their own project and define their own
 Condition type.
