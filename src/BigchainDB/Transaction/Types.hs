@@ -146,7 +146,7 @@ instance FromJSON SignedTransaction where
     tx <- parseTx val
     let (txid', value) = txidAndJson tx
     when (txid /= txid') $ fail "Txid mismatch"
-    --parseSignatures tx
+    --parseSignatures tx TODO
     pure $ SignedTx txid value tx
 
 

@@ -26,10 +26,11 @@ import Interledger.CryptoConditions.Impl as CCI
 
 
 data Condition =
-    Threshold Word16 [Condition]
-  | Ed25519 Ed2.PublicKey (Maybe Ed2.Signature)
-  | Preimage Preimage
+    Preimage Preimage
   | Prefix Prefix Int Condition
+  | Threshold Word16 [Condition]
+--  Rsa
+  | Ed25519 Ed2.PublicKey (Maybe Ed2.Signature)
   | Anon Int Fingerprint Int (Set.Set ConditionType)
   deriving (Show, Eq)
 
