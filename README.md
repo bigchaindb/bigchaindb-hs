@@ -4,6 +4,13 @@
 
 Work in progress!
 
+## Building
+
+Install [Stack](https://docs.haskellstack.org/en/stable/README/). This will take care of installing GHC for you. Then run: `stack build`.
+
+## Testing
+
+Run `stack test`.
 
 ### Autocompletion for CLI
 
