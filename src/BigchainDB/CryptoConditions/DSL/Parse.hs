@@ -8,7 +8,7 @@ module BigchainDB.CryptoConditions.DSL.Parse
 import Data.Attoparsec.Text
 import qualified Data.Text as T
 
-import Interledger.CryptoConditions.Standard
+import Interledger.CryptoConditions
 
 import BigchainDB.Crypto
 import BigchainDB.Prelude

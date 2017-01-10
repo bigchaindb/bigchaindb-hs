@@ -1,8 +1,8 @@
 module BigchainDB.CryptoConditions
-  ( module SCC
+  ( module CC
   , module DSL
   ) where
 
-import Interledger.CryptoConditions.Standard as SCC
+import Interledger.CryptoConditions as CC
 import BigchainDB.CryptoConditions.DSL as DSL
 

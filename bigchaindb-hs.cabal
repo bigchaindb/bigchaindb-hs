@@ -28,8 +28,7 @@ library
                        BigchainDB.CryptoConditions.DSL.Serialize,
                        Interledger.CryptoConditions,
                        Interledger.CryptoConditions.Impl,
-                       Interledger.CryptoConditions.Encoding,
-                       Interledger.CryptoConditions.Standard
+                       Interledger.CryptoConditions.Encoding
   build-depends:       base,
                        aeson,
                        text,

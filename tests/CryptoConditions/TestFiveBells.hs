@@ -24,7 +24,7 @@ import Data.Text.Encoding (encodeUtf8)
 import System.IO.Unsafe
 
 import BigchainDB.Crypto
-import Interledger.CryptoConditions.Standard
+import Interledger.CryptoConditions
 import Interledger.CryptoConditions.Encoding
 
 

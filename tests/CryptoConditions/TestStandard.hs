@@ -12,7 +12,7 @@ import Test.Tasty.HUnit
 import qualified Data.Text as T
 
 import BigchainDB.Crypto
-import Interledger.CryptoConditions.Standard
+import Interledger.CryptoConditions
 
 
 standardTests :: TestTree
