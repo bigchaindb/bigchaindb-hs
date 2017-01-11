@@ -2,6 +2,7 @@ import ujson as json
 import ctypes
 from ctypes import *
 import glob
+import pprint, os
 import os.path
 import time
 import sys
@@ -22,7 +23,6 @@ def call(name, req):
     getattr(bdb, name)(req, FTYPE(cb))
     return _res[0]
 
-import sys, pprint, os
 repeat = int(os.environ.get('REPEAT', '1'))
 start = time.time()
 for i in xrange(repeat):

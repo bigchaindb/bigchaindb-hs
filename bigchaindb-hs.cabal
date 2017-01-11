@@ -1,4 +1,4 @@
-name:                bigchaindb-hs
+name:                bigchaindb
 version:             0.1.0.0
 synopsis:            Common code library for BigchainDB
 -- description:      
@@ -25,16 +25,14 @@ library
                        BigchainDB.CryptoConditions,
                        BigchainDB.CryptoConditions.DSL,
                        BigchainDB.CryptoConditions.DSL.Parse,
-                       BigchainDB.CryptoConditions.DSL.Serialize,
-                       Interledger.CryptoConditions,
-                       Interledger.CryptoConditions.Impl,
-                       Interledger.CryptoConditions.Encoding
+                       BigchainDB.CryptoConditions.DSL.Serialize
   build-depends:       base,
                        aeson,
                        text,
                        bytestring,
                        base58-bytestring,
                        cryptonite,
+                       cryptoconditions,
                        microlens,
                        microlens-platform,
                        microlens-aeson,
@@ -43,16 +41,13 @@ library
                        attoparsec,
                        containers,
                        base64-bytestring,
-                       aeson-pretty,
-                       asn1-encoding,
-                       asn1-types,
-                       asn1-parse
+                       aeson-pretty
   hs-source-dirs:      src
   if flag(so)
     extra-libraries:   HSrts-ghc8.0.1
     exposed-modules:   BigchainDB.FFI
-    C-sources:           src/module_init.c
-    cpp-options:         -DMODULE=BigchainDB
+    C-sources:         src/module_init.c
+    cpp-options:       -DMODULE=BigchainDB
   default-language:    Haskell2010
 
 
@@ -87,16 +82,11 @@ test-suite test
                        containers,
                        base64-bytestring,
                        base58-bytestring,
-                       base16-bytestring,
                        tasty,
                        tasty-hunit,
                        tasty-golden,
                        smallcheck,
-                       tasty-smallcheck,
-                       asn1-encoding,
-                       asn1-types,
-                       asn1-parse,
-                       quickson
+                       tasty-smallcheck
   default-language:    Haskell2010
 
 executable profile-main

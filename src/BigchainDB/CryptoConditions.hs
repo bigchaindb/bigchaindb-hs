@@ -3,6 +3,6 @@ module BigchainDB.CryptoConditions
   , module DSL
   ) where
 
-import Interledger.CryptoConditions as CC
+import Network.CryptoConditions as CC
 import BigchainDB.CryptoConditions.DSL as DSL
 

@@ -18,7 +18,7 @@ import Data.Text.Lazy.Builder.Int (decimal)
 
 import Numeric
 
-import Interledger.CryptoConditions
+import Network.CryptoConditions
 
 import BigchainDB.Crypto
 import BigchainDB.CryptoConditions.DSL.Parse

@@ -19,17 +19,12 @@ import BigchainDB.CryptoConditions
 import BigchainDB.Crypto
 import BigchainDB.Prelude
 
-import CryptoConditions.TestFiveBells
-import CryptoConditions.TestStandard
-
 
 main :: IO ()
 main = defaultMain $ testGroup "Tests" [ apiTests
                                        , txTests
                                        , dslParserTests
                                        , dslSerializerTests
-                                       , fiveBellsSuite
-                                       , standardTests
                                        ]
 
 

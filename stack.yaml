@@ -1,6 +1,7 @@
 resolver: lts-7.14
 packages:
     - .
+    - ../../cryptoconditions-hs
 extra-deps:
     - base58-bytestring-0.1.0
     - quickson-0.3
