@@ -273,21 +273,16 @@ newtype FulfillmentTemplate = FFTemplate Condition
 instance ToJSON FulfillmentTemplate where
   toJSON (FFTemplate c) =
     let (expr, locals) = serializeDSL c
-    in object [ "uri" .= getURI c
-              , "expr" .= expr
-              , "locals" .= locals
+    in object [ "structure" .= expr
+              , "pubkeys" .= locals
               ]
 
 
 instance FromJSON FulfillmentTemplate where
   parseJSON = withObject "fulfillmentTemplate" $ \obj -> do
-    econdition <- deserializeDSL <$> obj .: "expr"
-                                 <*> obj .: "locals"
-    cond <- exceptToFail econdition
-    uri <- obj .: "uri"
-    if getURI cond /= uri
-       then fail "Incorrect condition URI"
-       else pure $ FFTemplate cond
+    econdition <- deserializeDSL <$> obj .: "structure"
+                                 <*> obj .: "pubkeys"
+    FFTemplate <$> exceptToFail econdition
 
 
 --------------------------------------------------------------------------------

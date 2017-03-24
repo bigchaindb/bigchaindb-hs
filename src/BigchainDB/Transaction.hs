@@ -4,6 +4,7 @@ module BigchainDB.Transaction
   ( module TTE
   , mkCreateTx
   , signTx
+  , signCondition
   , createOutput
   ) where
 
@@ -39,12 +40,18 @@ mkCreateTx assetData (PK creator) outputSpecs metadata = do
     return $ UnsignedTx txid jsonVal tx
 
 
+signCondition :: C8.ByteString -> Condition -> SecretKey -> Condition
+signCondition msg cond (SK sk) = 
+  let pk = Ed2.toPublic sk
+      sig = Ed2.sign sk pk msg
+  in fulfillEd25519 pk sig cond
+
+
 signInput :: SecretKey -> Txid -> Input FulfillmentTemplate
           -> Except String (Input T.Text)
-signInput (SK sk) txid (Input l (FFTemplate cond)) =
-  let pk = Ed2.toPublic sk
-      sig = Ed2.sign sk pk (C8.pack $ show (l, txid))
-      fcond = fulfillEd25519 pk sig cond
+signInput sk txid (Input l (FFTemplate cond)) =
+  let msg = C8.pack $ show (l, txid)
+      fcond = signCondition msg cond sk
       mff = getFulfillmentBase64 fcond
    in maybe (throwE "Could not sign tx") (return . Input l) mff
 

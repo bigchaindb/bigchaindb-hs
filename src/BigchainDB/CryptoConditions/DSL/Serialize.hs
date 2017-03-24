@@ -7,78 +7,58 @@ module BigchainDB.CryptoConditions.DSL.Serialize
 
 import Control.Monad.Trans.State
 
-import Data.Attoparsec.Text as AT hiding (decimal)
-import Data.Attoparsec.Text.Lazy as ATL hiding (decimal)
+import qualified Data.Attoparsec.Text as AT
 import Data.Char (chr)
-import qualified Data.Map.Strict as Map
+import qualified Data.IntMap.Strict as IntMap
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
-import Data.Text.Lazy.Builder (toLazyText)
-import Data.Text.Lazy.Builder.Int (decimal)
+import qualified Data.List as List
 
 import Numeric
 
-import Network.CryptoConditions
-
 import BigchainDB.Crypto
 import BigchainDB.CryptoConditions.DSL.Parse
+import BigchainDB.CryptoConditions.Types
 import BigchainDB.Prelude
 
 
-
-type Locals = Map.Map SortPK TL.Text
-
-
-newtype SortPK = SortPK PublicKey deriving (Eq, Show)
-
-instance Ord SortPK where
-  compare a b = compare (show a) (show b)
+serializeDSL :: Condition -> (T.Text, [PublicKey])
+serializeDSL cond = runState (serialize cond) []
 
 
-serializeDSL :: Condition -> (TL.Text, Map.Map TL.Text PublicKey)
-serializeDSL cond =
-  let (expr, locals) = runState (serialize cond) Map.empty
-      flipped = (\((SortPK a),b) -> (b,a)) <$> Map.toAscList locals
-   in (expr, Map.fromList flipped)
-
-
-serialize :: Condition -> State Locals TL.Text
+serialize :: Condition -> State [PublicKey] T.Text
 serialize (Threshold t subs) = do
   subs' <- mapM serialize subs
-  return $ "(" <> toLazyText (decimal t) <> " of "
-               <> TL.intercalate ", " subs' <> ")"
+  return $ "(" <> T.pack (show t) <> " of "
+               <> T.intercalate ", " subs' <> ")"
 serialize (Ed25519 pk _) = do
   local <- state $ localName (PK pk)
-  return $ "%" <> local
+  return $ "%" <> T.pack (show local)
 
 
-localName :: PublicKey -> Locals -> (TL.Text, Locals)
+localName :: PublicKey -> [PublicKey] -> (Int, [PublicKey])
 localName pk locals =
-  let nlocals = Map.size locals
-      nextLocal = TL.pack $ showIntAtBase 26 (chr . (+65)) nlocals ""
-      spk = SortPK pk
-   in case Map.lookup spk locals of
-       Just k -> (k, locals)
-       Nothing -> (nextLocal, Map.insert spk nextLocal locals)
+   case List.elemIndex pk locals of
+     Just i -> (i, locals)
+     Nothing -> (length locals, locals ++ [pk])
 
 
 --------------------------------------------------------------------------------
 -- Deserialize DSL - splices variables back into expression
 --
-deserializeDSL :: T.Text -> Map.Map T.Text T.Text -> Except String Condition
+deserializeDSL :: T.Text -> [T.Text] -> Except String Condition
 deserializeDSL expr locals = do
   spliced <- ExceptT $ return $ AT.parseOnly (spliceVars locals) expr
   parseDSL spliced
 
 
-spliceVars :: Map.Map T.Text T.Text -> Parser T.Text
+spliceVars :: [T.Text] -> AT.Parser T.Text
 spliceVars locals = do
-  head' <- ATL.takeWhile (/='%')
+  head' <- AT.takeWhile (/='%')
   next <- ("%" >> pure splice) <|> pure (pure "")
   (head' <>) <$> next
   where
     splice = do
-      name <- takeWhile1 (\c -> c >= 'A' && c <= 'Z')
-      case Map.lookup name locals of
+      name <- AT.decimal
+      case Just (locals !! name) of
            Just key -> (key <>) <$> spliceVars locals
-           Nothing -> fail $ "%" ++ T.unpack name ++ " is not defined"
+           Nothing -> fail $ "%" ++ show name ++ " is not defined"

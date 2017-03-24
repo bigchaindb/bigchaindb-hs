@@ -8,7 +8,7 @@ import time
 import sys
 
 
-so = max(glob.glob('.stack-work/install/x86_64-linux/lts-7.14/8.0.1/lib/x86_64-linux-ghc-8.0.1/bigchaindb-hs*/libHSbigchaindb*.so'), key=os.path.getctime)
+so = max(glob.glob('.stack-work/install/x86_64-linux/*/*/lib/x86_64-linux-ghc-8.0.1/libHSbigchaindb*.so'), key=os.path.getctime)
 so = os.environ.get('SO', so)
 print >>sys.stderr, so
 bdb=cdll.LoadLibrary(so)

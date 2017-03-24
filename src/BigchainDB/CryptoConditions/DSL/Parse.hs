@@ -8,9 +8,8 @@ module BigchainDB.CryptoConditions.DSL.Parse
 import Data.Attoparsec.Text
 import qualified Data.Text as T
 
-import Network.CryptoConditions
-
 import BigchainDB.Crypto
+import BigchainDB.CryptoConditions.Types
 import BigchainDB.Prelude
 
 
