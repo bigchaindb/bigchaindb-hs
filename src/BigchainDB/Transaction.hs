@@ -29,34 +29,34 @@ import BigchainDB.Transaction.Types as TTE
 
 
 mkCreateTx :: Object -> PublicKey -> [(Amount, T.Text)]
-           -> Object -> Except String UnsignedTransaction
+           -> Object -> Except BDBError UnsignedTransaction
 mkCreateTx assetData (PK creator) outputSpecs metadata = do
-    let ffill = FFTemplate $ ed25519Condition creator
+    let ffill = Condition $ ed25519Condition creator
         asset = AssetDefinition assetData
-    when (null outputSpecs) $ throwE "mkCreateTx: outputs cannot be empty"
+    when (null outputSpecs) $ throwE $ txCreateError "Outputs cannot be empty"
     outputs <- mapM createOutput outputSpecs
     let tx = Tx Create asset [Input nullOutputLink ffill] outputs metadata
         (txid, jsonVal) = txidAndJson tx
     return $ UnsignedTx txid jsonVal tx
 
 
-signCondition :: C8.ByteString -> Condition -> SecretKey -> Condition
+signCondition :: C8.ByteString -> CryptoCondition -> SecretKey -> CryptoCondition
 signCondition msg cond (SK sk) = 
   let pk = Ed2.toPublic sk
       sig = Ed2.sign sk pk msg
   in fulfillEd25519 pk sig cond
 
 
-signInput :: SecretKey -> Txid -> Input FulfillmentTemplate
-          -> Except String (Input T.Text)
-signInput sk txid (Input l (FFTemplate cond)) =
+signInput :: SecretKey -> Txid -> Input Condition
+          -> Except BDBError (Input T.Text)
+signInput sk txid (Input l (Condition cond)) =
   let msg = C8.pack $ show (l, txid)
       fcond = signCondition msg cond sk
       mff = getFulfillmentBase64 fcond
-   in maybe (throwE "Could not sign tx") (return . Input l) mff
+   in maybe (throwE missingPrivateKeys) (return . Input l) mff
 
 
-signTx :: SecretKey -> UnsignedTransaction -> Except String SignedTransaction
+signTx :: SecretKey -> UnsignedTransaction -> Except BDBError SignedTransaction
 signTx sk (UnsignedTx txid jsonVal tx) = do
   let (Tx op asset inputs outputs metadata) = tx
   signedInputs <- mapM (signInput sk txid) inputs
@@ -66,8 +66,7 @@ signTx sk (UnsignedTx txid jsonVal tx) = do
   return $ SignedTx txid signedVal signedTx
 
 
-createOutput :: (Amount, T.Text) -> Except String Output
+createOutput :: (Amount, T.Text) -> Except BDBError Output
 createOutput (amount, expr) = do
   c <- parseDSL expr
-  return $ Output (FFTemplate c) amount
-
+  return $ Output (Condition c) amount

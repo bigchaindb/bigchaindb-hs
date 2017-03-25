@@ -1,7 +1,7 @@
 
 module BigchainDB.CryptoConditions.Types (
     module IE
-  , Condition(..)
+  , CryptoCondition(..)
   , ed25519Condition
   , fulfillEd25519
   , readStandardFulfillmentBase64
@@ -20,14 +20,14 @@ import qualified Network.CryptoConditions.Impl as IE
 
 import BigchainDB.Prelude
 
-data Condition =
-    Threshold Word16 [Condition]
+data CryptoCondition =
+    Threshold Word16 [CryptoCondition]
   | Ed25519 Ed2.PublicKey (Maybe Ed2.Signature)
   | Anon Int Fingerprint Int (Set.Set ConditionType)
   deriving (Show, Eq)
 
 
-instance IsCondition Condition where
+instance IsCondition CryptoCondition where
   getType (Anon 2 _ _ _) = thresholdType
   getType (Anon 4 _ _ _) = ed25519Type
   getType (Threshold _ _) = thresholdType
@@ -64,12 +64,12 @@ toConditionTypes = Set.map $
   let u = undefined in (\tid -> getType $ Anon tid u u u)
 
 
-ed25519Condition :: Ed2.PublicKey -> Condition
+ed25519Condition :: Ed2.PublicKey -> CryptoCondition
 ed25519Condition pk = Ed25519 pk Nothing
 
 
 fulfillEd25519 :: Ed2.PublicKey -> Ed2.Signature
-               -> Condition -> Condition
+               -> CryptoCondition -> CryptoCondition
 fulfillEd25519 pk sig (Threshold t subs) =
   Threshold t $ fulfillEd25519 pk sig <$> subs
 fulfillEd25519 pk sig e@(Ed25519 pk' Nothing) =
@@ -77,5 +77,6 @@ fulfillEd25519 pk sig e@(Ed25519 pk' Nothing) =
 fulfillEd25519 _ _ c = c
 
 
-readStandardFulfillmentBase64 :: Fulfillment -> Except String Condition
-readStandardFulfillmentBase64 = either throwE pure . readFulfillmentBase64
+readStandardFulfillmentBase64 :: Fulfillment -> Except BDBError CryptoCondition
+readStandardFulfillmentBase64 = either throw pure . readFulfillmentBase64
+  where throw = throwE . invalidFulfillment

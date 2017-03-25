@@ -13,22 +13,22 @@ import BigchainDB.CryptoConditions.Types
 import BigchainDB.Prelude
 
 
-parseDSL :: T.Text -> Except String Condition
+parseDSL :: T.Text -> Except BDBError CryptoCondition
 parseDSL t = complete $ parse dslParser t
   where
     complete (Done _ r) = return r 
     complete (Partial f) = complete $ f ""
     complete (Fail rest _ msg) =
       let offset = T.length t - T.length rest
-       in throwE $ msg <> " at char " <> show offset
+       in throwE $ conditionDslParseError $ msg <> " at char " <> show offset
 
 
-dslParser :: Parser Condition
+dslParser :: Parser CryptoCondition
 dslParser = cond <* (endOfInput <|> fail "Expected end")
   where
     ss = skipSpace
     ex s = string s <|> fail ("Expected \"" <> T.unpack s <> "\"")
-    cond :: Parser Condition
+    cond :: Parser CryptoCondition
     cond = ss *> 
       expect2 thresholdHead ed25519
               "Expected \"({num} of ...\" or ed25519 key"

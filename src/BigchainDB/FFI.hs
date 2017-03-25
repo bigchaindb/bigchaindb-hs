@@ -1,62 +1,30 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module BigchainDB.FFI where
 
+import Data.Aeson
+import Data.Aeson.Types (Parser, parseEither)
 import qualified Data.ByteString as BS
+import Data.ByteString.Lazy (toStrict)
+import qualified Data.Map as Map
+import Data.Text
 
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Ptr
 
-import qualified BigchainDB.API as API
+import BigchainDB.API as API
+import BigchainDB.Prelude
 
 
-foreign export ccall createTx :: FFIMethod
-foreign export ccall generateKeyPair :: FFIMethod
-foreign export ccall validateTx :: FFIMethod
-foreign export ccall signTx :: FFIMethod
-foreign export ccall parseConditionDSL :: FFIMethod
-foreign export ccall signFulfillmentSpec :: FFIMethod
-foreign export ccall verifyFulfillment :: FFIMethod
-foreign export ccall readFulfillment :: FFIMethod
+foreign export ccall jsonRPC :: FFIMethod
 
 
 -- An FFI method takes a request string and a callback function to be
 -- called with the result. The reason for the callback is so that
 -- the result string pointer can be freed afterwards.
 type FFIMethod = CString -> FunPtr (CString -> IO CLLong) -> IO CLLong
-
-
-generateKeyPair :: FFIMethod
-generateKeyPair = toFFI API.generateKeyPair
-
-
-createTx :: FFIMethod
-createTx = toFFI API.createTx
-
-
-validateTx :: FFIMethod
-validateTx = toFFI API.validateTx
-
-
-signTx :: FFIMethod
-signTx = toFFI API.signTx
-
-
-parseConditionDSL :: FFIMethod
-parseConditionDSL = toFFI API.parseConditionDSL
-
-
-signFulfillmentSpec :: FFIMethod
-signFulfillmentSpec = toFFI API.signFulfillmentSpec
-
-
-verifyFulfillment :: FFIMethod
-verifyFulfillment = toFFI API.verifyFulfillment
-
-
-readFulfillment :: FFIMethod
-readFulfillment = toFFI API.readFulfillment
 
 
 -- | FFI interface for API method
@@ -72,3 +40,38 @@ toFFI method req callback = do
 --   converts a dynamic foreign callback to a haskell function
 foreign import ccall "dynamic" mkFun :: FunPtr (Ptr a -> IO CLLong)
                                      -> (Ptr a -> IO CLLong)
+
+
+jsonRPC :: FFIMethod
+jsonRPC = toFFI $ pure . jsonRPC'
+
+
+jsonRPC' :: BS.ByteString -> BS.ByteString
+jsonRPC' bs =
+  let res = do
+        val <- either (Left . parseError) pure $ eitherDecodeStrict bs
+        (name, params) <- either (Left . invalidRequest) pure $
+                             parseEither parseRequest val
+        callJsonMethod name params
+   in toStrict $ encode $ either wrapError wrapResult res
+  where
+    invalidRequest str = BDBError (-32600) Null str
+    parseError = BDBError (-32700) Null
+    parseRequest = withObject "request" $ \obj ->
+      (,) <$> obj .: "method" <*> obj .: "params"
+    wrapResult val = object ["result" .= val]
+    wrapError (BDBError code val msg) =
+       let err = object ["code" .= code, "message" .= msg, "data" .= val]
+        in object ["error" .= err]
+
+
+callJsonMethod :: Text -> Value -> Either BDBError Value
+callJsonMethod name params = do
+  (method,_) <- maybe (Left $ methodNotFound name) pure $
+                       Map.lookup name methods
+  act <- either (Left . invalidParams) pure $
+                       parseEither (withObject "params" method) params
+  runExcept act
+  where
+    methodNotFound name = BDBError (-32601) (toJSON name) "Method not found"
+    invalidParams str = BDBError (-32602) Null str

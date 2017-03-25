@@ -13,7 +13,7 @@ module BigchainDB.Transaction.Types
   , SignedTransaction(..)
   , UnsignedTransaction(..)
   , Asset(..)
-  , FulfillmentTemplate(..)
+  , Condition(..)
   , Input(..)
   , Operation(..)
   , Output(..)
@@ -161,7 +161,7 @@ instance ToJSON SignedTransaction where
 -- and having template fulfillments
 --
 data UnsignedTransaction =
-  UnsignedTx Txid Value (Transaction FulfillmentTemplate)
+  UnsignedTx Txid Value (Transaction Condition)
   deriving (Show)
 
 
@@ -246,7 +246,7 @@ instance FromJSON Amount where
 --------------------------------------------------------------------------------
 -- Output
 --
-data Output = Output FulfillmentTemplate Amount
+data Output = Output Condition Amount
   deriving (Show)
 
 
@@ -266,23 +266,24 @@ instance FromJSON Output where
 --------------------------------------------------------------------------------
 -- Fulfillment Template - Details needed to sign
 --
-newtype FulfillmentTemplate = FFTemplate Condition
+newtype Condition = Condition CryptoCondition
   deriving (Show)
 
 
-instance ToJSON FulfillmentTemplate where
-  toJSON (FFTemplate c) =
+instance ToJSON Condition where
+  toJSON (Condition c) =
     let (expr, locals) = serializeDSL c
     in object [ "structure" .= expr
               , "pubkeys" .= locals
               ]
 
 
-instance FromJSON FulfillmentTemplate where
+instance FromJSON Condition where
   parseJSON = withObject "fulfillmentTemplate" $ \obj -> do
-    econdition <- deserializeDSL <$> obj .: "structure"
-                                 <*> obj .: "pubkeys"
-    FFTemplate <$> exceptToFail econdition
+    econd <- deserializeDSL <$> obj .: "structure"
+                            <*> obj .: "pubkeys"
+    let econd' = withExcept show econd
+    Condition <$> exceptToFail econd'
 
 
 --------------------------------------------------------------------------------

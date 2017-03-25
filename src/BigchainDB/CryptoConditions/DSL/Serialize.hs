@@ -21,11 +21,11 @@ import BigchainDB.CryptoConditions.Types
 import BigchainDB.Prelude
 
 
-serializeDSL :: Condition -> (T.Text, [PublicKey])
+serializeDSL :: CryptoCondition -> (T.Text, [PublicKey])
 serializeDSL cond = runState (serialize cond) []
 
 
-serialize :: Condition -> State [PublicKey] T.Text
+serialize :: CryptoCondition -> State [PublicKey] T.Text
 serialize (Threshold t subs) = do
   subs' <- mapM serialize subs
   return $ "(" <> T.pack (show t) <> " of "
@@ -45,9 +45,10 @@ localName pk locals =
 --------------------------------------------------------------------------------
 -- Deserialize DSL - splices variables back into expression
 --
-deserializeDSL :: T.Text -> [T.Text] -> Except String Condition
+deserializeDSL :: T.Text -> [T.Text] -> Except BDBError CryptoCondition
 deserializeDSL expr locals = do
-  spliced <- ExceptT $ return $ AT.parseOnly (spliceVars locals) expr
+  let parse = AT.parseOnly (spliceVars locals) expr 
+  spliced <- ExceptT (return parse) `jerr` conditionDslParseError
   parseDSL spliced
 
 

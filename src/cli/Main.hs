@@ -8,12 +8,13 @@ import qualified Data.ByteString.Lazy.Char8 as C8L
 import Data.Aeson
 import Data.Aeson.Types hiding (Parser)
 import Data.Aeson.Encode.Pretty
-
+import qualified Data.Map as Map
 import Data.Maybe
 
 import Options.Applicative
 
 import qualified BigchainDB.API as API
+import qualified BigchainDB.FFI as API
 import BigchainDB.Prelude
 
 import System.Exit
@@ -22,8 +23,9 @@ import System.IO
 
 parseCmd :: Parser (IO C8.ByteString)
 parseCmd = subparser $
-  foldl1 (<>) $ (\(m,c,h) -> apiMethod m c h) <$> API.methods
+  foldl1 (<>) $ (\(c,(m,h)) -> apiMethod m c h) <$> methods
   where
+    methods = Map.toList API.methods
     apiMethod m c h = command c $ info (parseMethod m) (progDesc h)
     parseMethod m = m . C8.pack <$> argument str (metavar "JSON")
 

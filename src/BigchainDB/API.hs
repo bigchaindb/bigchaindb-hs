@@ -5,109 +5,100 @@ module BigchainDB.API where
 import Data.Aeson
 import Data.Aeson.Types (Parser, parseEither)
 import qualified Data.ByteString as BS
-import Data.ByteString.Lazy (toStrict)
+import qualified Data.Map as Map
+import Data.Text (Text)
 import Data.Text.Encoding
 
 import BigchainDB.Crypto
 import BigchainDB.CryptoConditions
 import BigchainDB.Prelude
+import BigchainDB.Exceptions
 import qualified BigchainDB.Transaction as TX
+
+import Lens.Micro
 
 import System.IO.Unsafe
 
 
-type RequestParser r = Object -> Parser (Except String r)
-type ApiMethod = BS.ByteString -> IO BS.ByteString
+type JsonMethod = Object -> Parser (Except BDBError Value)
 
 
-jsonAPI :: (ToJSON result) => RequestParser result -> ApiMethod
-jsonAPI parseRequestObject bs = do
-  let res = do
-               req <- eitherDecodeStrict bs
-               act <- parseEither parseRequest req
-               runExcept act
-  return $ toStrict $ encode $
-    case res of
-         Left err -> object ["error" .= toJSON err]
-         Right val -> toJSON val
-  where
-    parseRequest = withObject "object" parseRequestObject
-
-
-methods :: [(ApiMethod, String, String)]
-methods =
-  [ (generateKeyPair, "generateKeyPair", "Generate a ed25519 keys")
-  , (createTx, "createTx", "Generate a CREATE transaction")
-  , (signTx, "signTx", "Sign a transaction")
-  , (validateTx, "validateTx", "Validate a transaction (not against DB)")
-  , (validateFulfillmentSpec, "validateFulfillmentSpec",
-     "Validate fulfillment specification")
-  , (parseConditionDSL, "parseConditionDSL",
-     "Parse condition DSL into fulfillment spec")
-  , (signFulfillmentSpec, "signFulfillmentSpec", "Sign a fulfillment template")
-  , (verifyFulfillment, "verifyFulfillment", "Verify a fulfillment payload")
+methods :: Map.Map Text (JsonMethod, Text)
+methods = Map.fromList
+  [ ("generateKeyPair", (generateKeyPair, "Generate ed25519 key pair"))
+  , ("createTx", (createTx, "Generate a CREATE transaction"))
+  , ("signTx", (signTx, "Sign a transaction"))
+  , ("validateTx", (validateTx, "Validate a transaction (not against DB)"))
+  , ("validateCondition", (validateCondition, "Validate condition"))
+  , ("parseConditionDSL", (parseConditionDSL, "Parse condition DSL into Condition"))
+  , ("signFulfillmentSpec", (signFulfillmentSpec, "Sign a fulfillment template"))
+  , ("verifyFulfillment", (verifyFulfillment, "Verify a fulfillment payload"))
   ]
 
 
-generateKeyPair :: ApiMethod
-generateKeyPair = jsonAPI $ \_ -> return $ do
+ok :: Value
+ok = String "ok"
+
+
+generateKeyPair :: JsonMethod
+generateKeyPair _ = do
   let (pk, sk) = unsafePerformIO genKeyPair
-  return $ object ["public_key" .= pk , "secret_key" .= sk]
+  return $ return $ object ["public_key" .= pk , "secret_key" .= sk]
 
 
-createTx :: ApiMethod
-createTx = jsonAPI $ \obj -> do
-  TX.mkCreateTx <$> obj .:? "asset" .!= mempty
-                <*> obj .:  "creator"
-                <*> obj .:  "outputs"
-                <*> obj .:? "metadata" .!= mempty
+createTx :: JsonMethod
+createTx obj = do
+  act <- TX.mkCreateTx <$> obj .:? "asset" .!= mempty
+                       <*> obj .:  "creator"
+                       <*> obj .:  "outputs"
+                       <*> obj .:? "metadata" .!= mempty
+  pure $ toJSON <$> act
 
 
-signTx :: ApiMethod
-signTx = jsonAPI $ \obj -> do
+signTx :: JsonMethod
+signTx obj = do
   anyTx <- obj .: "tx"
+  key <- obj .: "key"
   untx <- case anyTx of
                TX.AnyS _ -> fail "Tx is already signed"
                TX.AnyU tx -> pure tx
-  TX.signTx <$> obj .: "key" <*> pure untx
+  pure $ toJSON <$> TX.signTx key untx
 
 
-validateTx :: ApiMethod
-validateTx = jsonAPI $ \obj -> do
+validateTx :: JsonMethod
+validateTx obj = do
   _ <- parseJSON (Object obj) :: Parser TX.AnyTransaction
-  return $ return $ object ["result" .= String "ok"]
+  pure $ pure ok
 
 
-validateFulfillmentSpec :: ApiMethod
-validateFulfillmentSpec = jsonAPI $ \obj -> do
-  ffTemplate <- parseJSON (Object obj) :: Parser TX.FulfillmentTemplate
-  return $ return $ object ["result" .= toJSON (show ffTemplate)]
+validateCondition :: JsonMethod
+validateCondition obj = do
+  _ <- parseJSON (Object obj) :: Parser TX.Condition
+  pure $ pure ok
 
 
-parseConditionDSL :: ApiMethod
-parseConditionDSL = jsonAPI $ \obj -> do
+parseConditionDSL :: JsonMethod
+parseConditionDSL obj = do
   expr <- obj .: "expr"
-  return $ do
-    cond <- parseDSL expr
-    return $ object ["result" .= toJSON (TX.FFTemplate cond)]
+  pure $ toJSON . TX.Condition <$> parseDSL expr
 
 
-signFulfillmentSpec :: ApiMethod
-signFulfillmentSpec = jsonAPI $ \obj -> do
-  (TX.FFTemplate cond) <- obj .: "condition"
+signFulfillmentSpec :: JsonMethod
+signFulfillmentSpec obj = do
+  (TX.Condition cond) <- obj .: "condition"
   keys <- obj .: "keys" :: Parser [SecretKey]
   msg <- encodeUtf8 <$> obj .: "msg"
   let signed = foldl (TX.signCondition msg) cond keys
       mff = getFulfillmentBase64 signed
-      out = maybe (throwE "Could not sign")
-                  (\uri -> pure (object ["result" .= uri]))
+      out = maybe (throwE missingPrivateKeys)
+                  (\uri -> pure (toJSON $ uri))
                   mff
   return out
-  
 
-verifyFulfillment :: ApiMethod
-verifyFulfillment = jsonAPI $ \obj -> do
-  (TX.FFTemplate target) <- obj .: "condition"
+
+verifyFulfillment :: JsonMethod
+verifyFulfillment obj = do
+  (TX.Condition target) <- obj .: "condition"
   ff <- encodeUtf8 <$> obj .: "fulfillment"
   msg <- encodeUtf8 <$> obj .: "msg"
   return $ do
@@ -116,14 +107,13 @@ verifyFulfillment = jsonAPI $ \obj -> do
     pure $ object ["result" .= valid]
 
 
-readFulfillment :: ApiMethod
-readFulfillment = jsonAPI $ \obj -> do
+readFulfillment :: JsonMethod
+readFulfillment obj = do
   ff <- encodeUtf8 <$> obj .: "fulfillment"
   --msg <- encodeUtf8 <$> obj .:? "message"
   return $ do
     ffill <- readStandardFulfillmentBase64 ff
-    pure $ object ["result" .= TX.FFTemplate ffill]
+    pure $ toJSON $ TX.Condition ffill
     --if validate (getConditionURI ffill) ffill msg
-    --   then pure $ object ["result" .= TX.FFTemplate ffill]
+    --   then pure $ object ["result" .= TX.Condition ffill]
     --   else throwE "Invalid fulfillment"
-             

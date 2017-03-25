@@ -4,6 +4,7 @@ module BigchainDB.Prelude
   , module DM
   , module TC
   , module TE
+  , module ALL
   , exceptToFail
   ) where
 
@@ -16,6 +17,7 @@ import Control.Monad.Trans.Class as TC
 import Data.Functor.Identity
 import Data.Monoid as DM
 
+import BigchainDB.Exceptions as ALL
 
 exceptToFail :: Monad m => Except String a -> m a
 exceptToFail = either fail return . runIdentity . runExceptT
