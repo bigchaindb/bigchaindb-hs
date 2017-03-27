@@ -23,7 +23,7 @@ import System.IO.Unsafe
 type JsonMethod = Object -> Parser (Except BDBError Value)
 
 
-methods :: Map.Map Text (JsonMethod, Text)
+methods :: Map.Map String (JsonMethod, String)
 methods = Map.fromList
   [ ("generateKeyPair", (generateKeyPair, "Generate ed25519 key pair"))
   , ("createTx", (createTx, "Generate a CREATE transaction"))
@@ -34,6 +34,18 @@ methods = Map.fromList
   , ("signFulfillmentSpec", (signFulfillmentSpec, "Sign a fulfillment template"))
   , ("verifyFulfillment", (verifyFulfillment, "Verify a fulfillment payload"))
   ]
+
+
+callMethod :: String -> Value -> Either BDBError Value
+callMethod name params = do
+  (method,_) <- maybe (Left $ methodNotFound name) pure $
+                       Map.lookup name methods
+  act <- either (Left . invalidParams) pure $
+                       parseEither (withObject "params" method) params
+  runExcept act
+  where
+    methodNotFound name = BDBError (-32601) (toJSON name) "Method not found"
+    invalidParams str = BDBError (-32602) Null str
 
 
 ok :: Value
@@ -90,10 +102,7 @@ signFulfillmentSpec obj = do
   msg <- encodeUtf8 <$> obj .: "msg"
   let signed = foldl (TX.signCondition msg) cond keys
       mff = getFulfillmentBase64 signed
-      out = maybe (throwE missingPrivateKeys)
-                  (\uri -> pure (toJSON $ uri))
-                  mff
-  return out
+  pure $ maybe (throwE missingPrivateKeys) (pure . toJSON) mff
 
 
 verifyFulfillment :: JsonMethod
@@ -101,7 +110,7 @@ verifyFulfillment obj = do
   (TX.Condition target) <- obj .: "condition"
   ff <- encodeUtf8 <$> obj .: "fulfillment"
   msg <- encodeUtf8 <$> obj .: "msg"
-  return $ do
+  pure $ do
     ffill <- readStandardFulfillmentBase64 ff
     let valid = validate (getConditionURI target) ffill msg
     pure $ object ["result" .= valid]

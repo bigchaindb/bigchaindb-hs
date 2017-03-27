@@ -8,6 +8,8 @@ module BigchainDB.Prelude
   , exceptToFail
   ) where
 
+import Data.Aeson
+import Data.Aeson.Types
 
 import Control.Monad as CM (join, when)
 import Control.Applicative as CA
@@ -21,3 +23,6 @@ import BigchainDB.Exceptions as ALL
 
 exceptToFail :: Monad m => Except String a -> m a
 exceptToFail = either fail return . runIdentity . runExceptT
+
+
+

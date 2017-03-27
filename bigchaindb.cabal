@@ -25,7 +25,8 @@ library
                        BigchainDB.CryptoConditions.DSL,
                        BigchainDB.CryptoConditions.DSL.Parse,
                        BigchainDB.CryptoConditions.DSL.Serialize,
-                       BigchainDB.CryptoConditions.Types
+                       BigchainDB.CryptoConditions.Types,
+                       BigchainDB.Exceptions
   build-depends:       base,
                        aeson,
                        text,
@@ -44,8 +45,8 @@ library
                        aeson-pretty
   hs-source-dirs:      src
   if flag(so)
-    extra-libraries:   HSrts-ghc8.0.1
     exposed-modules:   BigchainDB.FFI
+    extra-libraries:   HSrts-ghc8.0.1
     C-sources:         src/module_init.c
     cpp-options:       -DMODULE=BigchainDB
   default-language:    Haskell2010
@@ -59,6 +60,7 @@ executable bigchaindb
   Build-depends:       base,
                        bigchaindb,
                        bytestring,
+                       containers,
                        optparse-applicative,
                        aeson,
                        aeson-pretty

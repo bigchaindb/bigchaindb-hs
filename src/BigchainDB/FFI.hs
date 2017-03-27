@@ -52,7 +52,7 @@ jsonRPC' bs =
         val <- either (Left . parseError) pure $ eitherDecodeStrict bs
         (name, params) <- either (Left . invalidRequest) pure $
                              parseEither parseRequest val
-        callJsonMethod name params
+        callMethod name params
    in toStrict $ encode $ either wrapError wrapResult res
   where
     invalidRequest str = BDBError (-32600) Null str
@@ -63,15 +63,3 @@ jsonRPC' bs =
     wrapError (BDBError code val msg) =
        let err = object ["code" .= code, "message" .= msg, "data" .= val]
         in object ["error" .= err]
-
-
-callJsonMethod :: Text -> Value -> Either BDBError Value
-callJsonMethod name params = do
-  (method,_) <- maybe (Left $ methodNotFound name) pure $
-                       Map.lookup name methods
-  act <- either (Left . invalidParams) pure $
-                       parseEither (withObject "params" method) params
-  runExcept act
-  where
-    methodNotFound name = BDBError (-32601) (toJSON name) "Method not found"
-    invalidParams str = BDBError (-32602) Null str

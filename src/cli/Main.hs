@@ -14,23 +14,29 @@ import Data.Maybe
 import Options.Applicative
 
 import qualified BigchainDB.API as API
-import qualified BigchainDB.FFI as API
 import BigchainDB.Prelude
 
 import System.Exit
 import System.IO
 
 
-parseCmd :: Parser (IO C8.ByteString)
+type Method = Either BDBError Value
+
+parseCmd :: Parser Method
 parseCmd = subparser $
-  foldl1 (<>) $ (\(c,(m,h)) -> apiMethod m c h) <$> methods
+  foldl1 (<>) $ (\(c,(_,h)) -> apiMethod c h) <$> methods
   where
     methods = Map.toList API.methods
-    apiMethod m c h = command c $ info (parseMethod m) (progDesc h)
-    parseMethod m = m . C8.pack <$> argument str (metavar "JSON")
+    apiMethod c h = command c $ info (parseMethod c) (progDesc h)
+    parseMethod c = API.callMethod c <$> argument jsonArg (metavar "JSON")
 
 
-parseOpts :: ParserInfo (Bool, IO C8.ByteString)
+jsonArg :: ReadM Value
+jsonArg = eitherReader $ eitherDecode . C8L.pack
+
+
+
+parseOpts :: ParserInfo (Bool, Method)
 parseOpts = info (parser <**> helper) desc
   where
     parser = (,) <$> pretty <*> parseCmd
@@ -41,11 +47,10 @@ parseOpts = info (parser <**> helper) desc
 main :: IO ()
 main = do
   (pretty, act) <- execParser parseOpts
-  rjson <- C8L.fromStrict <$> act
-  let (Just val) = decode rjson
-      out = if pretty then encodePretty' pconf val else rjson
-      err = parseMaybe (\o -> o .: "error") val :: Maybe String
-  when (isJust err) $ C8L.hPutStrLn stderr out >> exitFailure
-  C8L.putStrLn out
+  case act of
+       Left err -> print err >> exitFailure
+       Right val -> do
+          let enc = if pretty then encodePretty' pconf else encode
+          C8L.putStrLn $ enc val
   where
     pconf = defConfig { confCompare=compare, confIndent=Spaces 2 }

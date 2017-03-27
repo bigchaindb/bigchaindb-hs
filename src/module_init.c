@@ -6,6 +6,7 @@
 #include <HsFFI.h>
 
 //extern void __stginit_BigchainDB(void);
+//hs_add_root(__stginit_BigchainDB);
 
 static void library_init (void) __attribute__ ((constructor));
 static void
@@ -16,13 +17,4 @@ library_init (void)
   static int argc = 1;
 
   hs_init (&argc, &argv_);
-  //hs_add_root(__stginit_BigchainDB);
 }
-
-static void library_exit (void) __attribute__ ((destructor));
-static void
-library_exit (void)
-{
-  //hs_exit ();
-}
-

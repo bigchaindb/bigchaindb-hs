@@ -6,6 +6,7 @@ import Test.Tasty.HUnit
 
 import qualified Crypto.PubKey.Ed25519 as Ed2
 
+import Data.Aeson
 import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as Map
 import Data.Monoid
@@ -45,13 +46,13 @@ txTests :: TestTree
 txTests = testGroup "Test Transaction ID validation"
   [
      testCase "tx-right-id-succeeds" $ do
-         res <- validateTx =<< create
-         res @?= "{\"result\":\"ok\"}"
+         let res = validateTx =<< create
+         res @?= Right (String "ok")
   ,
      testCase "tx-wrong-id-fails" $ do
-         tx <- create
-         res <- validateTx $ tx & key "id" .~ badId
-         res @?= "{\"error\":\"Error in $: Txid mismatch\"}"
+         let tx = create
+         let res = runExcept $ validateTx $ tx & key "id" .~ badId
+         res @?= Left (BDBError 1 Null "") -- "{\"error\":\"Error in $: Txid mismatch\"}"
   ]
   where
     badId = "FFFd1a44abcf0a18b7aec2d406c11ed0cb0bd371847145be7822c76077ca5514"
@@ -72,6 +73,9 @@ dslParserTests = testGroup "CryptoConditions DSL Parser"
   , testCase "threshold-simple" $
       runExcept (parseDSL ("(2 of " <> alice <> ", " <> bob <> " * 2)"))
       @?= Right (Threshold 2 [ed2Alice, ed2Bob, ed2Bob])
+
+  , testCase "threshold-empty" $
+      runExcept (parseDSL "(1 of )") @?= Left "Failed reading"
   ]
 
 
@@ -80,11 +84,11 @@ dslSerializerTests = testGroup "CryptoConditions DSL Serializer"
   [ 
     testCase "simple" $
       serializeDSL (Threshold 2 [ed2Alice, ed2Bob, ed2Bob])
-      @?= ("(2 of %A, %B, %B)", Map.fromList [("A", PK pkAlice), ("B", PK pkBob)])
+      @?= ("(2 of %A, %B, %B)", [PK pkAlice, PK pkBob])
   ]
 
 
-ed2Alice, ed2Bob :: Condition
+ed2Alice, ed2Bob :: CryptoCondition
 ed2Alice = ed25519Condition pkAlice
 ed2Bob = ed25519Condition pkBob
 
