@@ -2,7 +2,7 @@
 
 [BigchainDB](https://github.com/bigchaindb/bigchaindb) client tools for creating and signing transactions.
 
-Work in progress!
+Achtung! Work in progress! Much of the below may already be wrong!
 
 ## Building
 
