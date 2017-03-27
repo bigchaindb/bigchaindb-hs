@@ -1,8 +1,8 @@
 name:                bigchaindb
 version:             0.1.0.0
 synopsis:            Common code library for BigchainDB
--- license:             
--- license-file:       
+license:             Apache2
+license-file:        LICENSES.md
 author:              Scott Sadler
 maintainer:          scott@bigchaindb.com
 category:            Database
