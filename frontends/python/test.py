@@ -1,4 +1,4 @@
-from bigchaindb_shared import api, BDBError
+from bigchaindb_shared import call_json_rpc, BDBError
 
 
 """
@@ -71,6 +71,13 @@ def test_validate_tx():
 
 def test_parse_condition_dsl():
     res = api.parseConditionDSL({
+        'expr': 'DD8qvyA6rXSTG4P1ojuFYvXUJ8UHnCy8srWE13xkZdvg',
+    })
+    assert res == {
+        'pubkeys': [pub],
+        'structure': '%0'
+        }
+    res = api.parseConditionDSL({
         'expr': ('(2 of DD8qvyA6rXSTG4P1ojuFYvXUJ8UHnCy8srWE13xkZdvg)'),
     })
     assert res == {
@@ -100,11 +107,22 @@ def test_verify_fulfillment():
         'msg': 'hello',
         'condition': TX['outputs'][0]['condition'],
     })
-    assert res == {'result': True}
+    assert res == {'valid': True}
         
     res = api.verifyFulfillment({
         'fulfillment': ffill,
         'msg': 'wat',
         'condition': TX['outputs'][0]['condition'],
     })
-    assert res == {'result': False}
+    assert res == {'valid': False}
+
+
+class API(object):
+    def __getattr__(self, name):
+        return lambda val: API.call(name, val)
+    
+    @staticmethod
+    def call(name, val):
+        return call_json_rpc(name, val)
+
+api = API()

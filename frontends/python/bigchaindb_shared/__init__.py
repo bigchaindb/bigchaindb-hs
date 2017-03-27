@@ -15,23 +15,13 @@ def call_so(name, req):
     _res = [None]
     def cb(data):
         _res[0] = data
-    getattr(SHARED_OBJECT, name)(req, FTYPE(cb))
+    getattr(SHARED_OBJECT, name)(req.encode(), FTYPE(cb))
     return _res[0].decode()
 
 
 class BDBError(Exception):
     pass
 
-
-class API(object):
-    def __getattr__(self, name):
-        return lambda val: API.call(name, val)
-    
-    @staticmethod
-    def call(name, val):
-        return call_json_rpc(name, val)
-
-api = API()
 
 def call_json_rpc(method, params):
     request = {'method': method, 'params': params}

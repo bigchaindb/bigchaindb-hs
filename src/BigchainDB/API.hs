@@ -32,6 +32,7 @@ methods = Map.fromList
   , ("validateCondition", (validateCondition, "Validate condition"))
   , ("parseConditionDSL", (parseConditionDSL, "Parse condition DSL into Condition"))
   , ("signCondition", (signCondition, "Sign a condition"))
+  , ("readFulfillment", (readFulfillment, "Get condition from fulfillment"))
   , ("verifyFulfillment", (verifyFulfillment, "Verify a fulfillment payload"))
   ]
 
@@ -117,7 +118,7 @@ verifyFulfillment obj = do
   pure $ do
     ffill <- readStandardFulfillmentBase64 ff
     let valid = validate (getConditionURI target) ffill msg
-    pure $ object ["result" .= valid]
+    pure $ object ["valid" .= valid]
 
 
 readFulfillment :: JsonMethod
