@@ -1,5 +1,5 @@
 name:                bigchaindb
-version:             0.1.0.0
+version:             0.1.0.1
 synopsis:            Common code library for BigchainDB
 license:             Apache2
 license-file:        LICENSES.md
