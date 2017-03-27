@@ -31,7 +31,7 @@ methods = Map.fromList
   , ("validateTx", (validateTx, "Validate a transaction (not against DB)"))
   , ("validateCondition", (validateCondition, "Validate condition"))
   , ("parseConditionDSL", (parseConditionDSL, "Parse condition DSL into Condition"))
-  , ("signFulfillmentSpec", (signFulfillmentSpec, "Sign a fulfillment template"))
+  , ("signCondition", (signCondition, "Sign a condition"))
   , ("verifyFulfillment", (verifyFulfillment, "Verify a fulfillment payload"))
   ]
 
@@ -79,8 +79,12 @@ signTx obj = do
 
 validateTx :: JsonMethod
 validateTx obj = do
-  _ <- parseJSON (Object obj) :: Parser TX.AnyTransaction
-  pure $ pure ok
+  txVal <- obj .: "tx" :: Parser Value
+  let res = fromJSON txVal :: Result TX.AnyTransaction
+  pure $
+    case res of
+         Error str -> throwE $ badTx str
+         Success _ -> pure "ok"
 
 
 validateCondition :: JsonMethod
@@ -95,8 +99,8 @@ parseConditionDSL obj = do
   pure $ toJSON . TX.Condition <$> parseDSL expr
 
 
-signFulfillmentSpec :: JsonMethod
-signFulfillmentSpec obj = do
+signCondition :: JsonMethod
+signCondition obj = do
   (TX.Condition cond) <- obj .: "condition"
   keys <- obj .: "keys" :: Parser [SecretKey]
   msg <- encodeUtf8 <$> obj .: "msg"
