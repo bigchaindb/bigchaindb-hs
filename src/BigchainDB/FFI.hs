@@ -48,18 +48,9 @@ jsonRPC = toFFI $ pure . jsonRPC'
 
 jsonRPC' :: BS.ByteString -> BS.ByteString
 jsonRPC' bs =
-  let res = do
-        val <- either (Left . parseError) pure $ eitherDecodeStrict bs
-        (name, params) <- either (Left . invalidRequest) pure $
-                             parseEither parseRequest val
-        callMethod name params
-   in toStrict $ encode $ either wrapError wrapResult res
+  let res = case eitherDecodeStrict bs of
+                 Left err -> wrapJsonError (parseError err)
+                 Right res -> runJsonRpc val
+   in toStrict $ encode res
   where
-    invalidRequest str = BDBError (-32600) Null str
     parseError = BDBError (-32700) Null
-    parseRequest = withObject "request" $ \obj ->
-      (,) <$> obj .: "method" <*> obj .: "params"
-    wrapResult val = object ["result" .= val]
-    wrapError (BDBError code val msg) =
-       let err = object ["code" .= code, "message" .= msg, "data" .= val]
-        in object ["error" .= err]

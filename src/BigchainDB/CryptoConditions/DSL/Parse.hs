@@ -16,7 +16,7 @@ import BigchainDB.Prelude
 parseDSL :: T.Text -> Except BDBError CryptoCondition
 parseDSL t = complete $ parse dslParser t
   where
-    complete (Done _ r) = return r 
+    complete (Done _ r) = return r
     complete (Partial f) = complete $ f ""
     complete (Fail rest _ msg) =
       let offset = T.length t - T.length rest
@@ -33,7 +33,12 @@ dslParser = cond <* (endOfInput <|> fail "Expected end")
       expect2 thresholdHead ed25519
               "Expected \"({num} of ...\" or ed25519 key"
     thresholdHead = "(" *> ss *> (thresholdRest <$> decimal) <* ss <* "of" <* ss
-    thresholdRest t = Threshold t <$> inner <* ss <* ex ")" <* ss
+    thresholdRest 0 = fail "Illegal threshold: 0"
+    thresholdRest t = do
+      subs <- inner <* ss <* ex ")" <* ss
+      if fromIntegral t > length subs
+         then fail "Impossible threshold"
+         else pure (Threshold t subs)
     subcondition = flip replicate <$> cond <*> weight
     inner = concat <$> sepBy1 subcondition (ss >> "," >> ss)
     weight = (ss *> "*" *> ss *> decimal) <|> pure 1

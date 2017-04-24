@@ -6,7 +6,7 @@ import Test.Tasty.HUnit
 
 import qualified Crypto.PubKey.Ed25519 as Ed2
 
-import Data.Aeson
+import Data.Aeson.Quick
 import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as Map
 import Data.Monoid
@@ -32,8 +32,6 @@ main = defaultMain $ testGroup "Tests" [ apiTests
 apiTests :: TestTree
 apiTests = testGroup "Test the JSON API"
   [
-     run "createTx1" "tests/api/createTx1.json" $
-         createTx "{\"creator\":\"7uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1\", \"outputs\":[[\"1\",\"(1 of 7uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1)\"]]}"
   ]
   where
     diff ref new = ["colordiff", "-u", ref, new]
@@ -46,17 +44,21 @@ txTests :: TestTree
 txTests = testGroup "Test Transaction ID validation"
   [
      testCase "tx-right-id-succeeds" $ do
-         let res = validateTx =<< create
+         let res = runExcept $ do
+               tx <- createTx createSpec
+               validateTx $ "{tx}" .% tx
          res @?= Right (String "ok")
   ,
      testCase "tx-wrong-id-fails" $ do
-         let tx = create
-         let res = runExcept $ validateTx $ tx & key "id" .~ badId
-         res @?= Left (BDBError 1 Null "") -- "{\"error\":\"Error in $: Txid mismatch\"}"
+         let res = runExcept $ do
+               tx <- createTx createSpec
+               validateTx $ "{tx}" .% (build "{id}" tx badId)
+         res @?= Left (BDBError 100 Null "Txid mismatch")
   ]
   where
-    badId = "FFFd1a44abcf0a18b7aec2d406c11ed0cb0bd371847145be7822c76077ca5514"
-    create = createTx "{\"creator\":\"7uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1\", \"outputs\":[[\"1\",\"(1 of 7uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1)\"]]}"
+    badId = "FFFd1a44abcf0a18b7aec2d406c11ed0cb0bd371847145be7822c76077ca5514" :: Text
+    createSpec = object ["creator" .= alice,
+                         "outputs" .= toJSON [["1","(1 of " <> alice <> ")"]]]
 
 
 
@@ -68,14 +70,23 @@ dslParserTests = testGroup "CryptoConditions DSL Parser"
 
   , testCase "ed25519-fail-b58" $
       runExcept (parseDSL "0uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1")
-      @?= Left "Failed reading: Expected \"({num} of ...\" or ed25519 key at char 0"
+      @?= Left (conditionDslParseError "Failed reading: Expected \"({num} of ...\" or ed25519 key at char 0")
 
   , testCase "threshold-simple" $
       runExcept (parseDSL ("(2 of " <> alice <> ", " <> bob <> " * 2)"))
       @?= Right (Threshold 2 [ed2Alice, ed2Bob, ed2Bob])
 
   , testCase "threshold-empty" $
-      runExcept (parseDSL "(1 of )") @?= Left "Failed reading"
+      runExcept (parseDSL "(1 of )") @?=
+        Left (conditionDslParseError "Failed reading: Expected \"({num} of ...\" or ed25519 key at char 6")
+
+  , testCase "threshold low" $
+      runExcept (parseDSL $ "(0 of " <> alice <> ")")
+      @?= Left (conditionDslParseError "Failed reading: Illegal threshold: 0 at char 6")
+  , testCase "threshold high" $
+      runExcept (parseDSL $ "(3 of " <> alice <> "," <> bob <> ")")
+      @?= Left (conditionDslParseError "Failed reading: Impossible threshold at char 96")
+      
   ]
 
 
@@ -84,7 +95,7 @@ dslSerializerTests = testGroup "CryptoConditions DSL Serializer"
   [ 
     testCase "simple" $
       serializeDSL (Threshold 2 [ed2Alice, ed2Bob, ed2Bob])
-      @?= ("(2 of %A, %B, %B)", [PK pkAlice, PK pkBob])
+      @?= ("(2 of %0, %1, %1)", [PK pkAlice, PK pkBob])
   ]
 
 

@@ -72,6 +72,7 @@ test-suite test
   build-depends:       bigchaindb,
                        base,
                        aeson,
+                       aeson-quick,
                        text,
                        bytestring,
                        cryptonite,

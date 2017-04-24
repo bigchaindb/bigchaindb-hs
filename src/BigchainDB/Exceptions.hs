@@ -6,7 +6,7 @@ import Control.Monad.Trans.Except
 import Data.Aeson
 
 data BDBError = BDBError Int Value String
-  deriving (Show)
+  deriving (Eq, Show)
 
 
 jerr :: Except String a -> (String -> BDBError) -> Except BDBError a

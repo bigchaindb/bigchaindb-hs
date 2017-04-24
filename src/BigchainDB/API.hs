@@ -20,7 +20,7 @@ import Lens.Micro
 import System.IO.Unsafe
 
 
-type JsonMethod = Object -> Parser (Except BDBError Value)
+type JsonMethod = Value -> Except BDBError Value
 
 
 methods :: Map.Map String (JsonMethod, String)
@@ -37,30 +37,59 @@ methods = Map.fromList
   ]
 
 
-callMethod :: String -> Value -> Either BDBError Value
-callMethod name params = do
+runJsonRpc :: Value -> Either BDBError Value
+runJsonRpc val = do
+  (name, params) <- either (Left . invalidRequest) pure $
+                       parseEither parseRequest val
+  runMethod name params
+  where
+    invalidRequest str = BDBError (-32600) Null str
+    parseRequest = withObject "request" $ \obj ->
+      (,) <$> obj .: "method" <*> obj .: "params"
+
+
+runMethod :: String -> Value -> Either BDBError Value
+runMethod name params = do
   (method,_) <- maybe (Left $ methodNotFound name) pure $
                        Map.lookup name methods
-  act <- either (Left . invalidParams) pure $
-                       parseEither (withObject "params" method) params
-  runExcept act
+  runExcept $ method params
   where
     methodNotFound name = BDBError (-32601) (toJSON name) "Method not found"
-    invalidParams str = BDBError (-32602) Null str
+
+
+wrapJson :: Either BDBError Value -> Value
+wrapJson = either wrapJsonError wrapSuccess
+  where
+    wrapSuccess val = object ["result" .= val]
+
+
+wrapJsonError :: BDBError -> Value
+wrapJsonError (BDBError code val msg) =
+   let err = object ["code" .= code, "message" .= msg, "data" .= val]
+    in object ["error" .= err]
 
 
 ok :: Value
 ok = String "ok"
 
 
+params :: (Object -> Parser (Except BDBError Value)) -> Value -> Except BDBError Value
+params parse val = do
+  let res = parseEither (withObject "object" parse) val
+  act <- either (throwE . invalidParams) pure res
+  act
+  where
+    invalidParams str = BDBError (-32602) Null str
+
+
 generateKeyPair :: JsonMethod
 generateKeyPair _ = do
   let (pk, sk) = unsafePerformIO genKeyPair
-  return $ return $ object ["public_key" .= pk , "secret_key" .= sk]
+  return $ object ["public_key" .= pk, "secret_key" .= sk]
 
 
 createTx :: JsonMethod
-createTx obj = do
+createTx = params $ \obj -> do
   act <- TX.mkCreateTx <$> obj .:? "asset" .!= mempty
                        <*> obj .:  "creator"
                        <*> obj .:  "outputs"
@@ -69,7 +98,7 @@ createTx obj = do
 
 
 signTx :: JsonMethod
-signTx obj = do
+signTx = params $ \obj -> do
   anyTx <- obj .: "tx"
   key <- obj .: "key"
   untx <- case anyTx of
@@ -79,29 +108,29 @@ signTx obj = do
 
 
 validateTx :: JsonMethod
-validateTx obj = do
+validateTx = params $ \obj -> do
   txVal <- obj .: "tx" :: Parser Value
   let res = fromJSON txVal :: Result TX.AnyTransaction
   pure $
     case res of
          Error str -> throwE $ badTx str
-         Success _ -> pure "ok"
+         Success _ -> pure ok
 
 
 validateCondition :: JsonMethod
-validateCondition obj = do
+validateCondition = params $ \obj -> do
   _ <- parseJSON (Object obj) :: Parser TX.Condition
   pure $ pure ok
 
 
 parseConditionDSL :: JsonMethod
-parseConditionDSL obj = do
+parseConditionDSL = params $ \obj -> do
   expr <- obj .: "expr"
   pure $ toJSON . TX.Condition <$> parseDSL expr
 
 
 signCondition :: JsonMethod
-signCondition obj = do
+signCondition = params $ \obj -> do
   (TX.Condition cond) <- obj .: "condition"
   keys <- obj .: "keys" :: Parser [SecretKey]
   msg <- encodeUtf8 <$> obj .: "msg"
@@ -111,7 +140,7 @@ signCondition obj = do
 
 
 verifyFulfillment :: JsonMethod
-verifyFulfillment obj = do
+verifyFulfillment = params $ \obj -> do
   (TX.Condition target) <- obj .: "condition"
   ff <- encodeUtf8 <$> obj .: "fulfillment"
   msg <- encodeUtf8 <$> obj .: "msg"
@@ -122,7 +151,7 @@ verifyFulfillment obj = do
 
 
 readFulfillment :: JsonMethod
-readFulfillment obj = do
+readFulfillment = params $ \obj -> do
   ff <- encodeUtf8 <$> obj .: "fulfillment"
   --msg <- encodeUtf8 <$> obj .:? "message"
   return $ do

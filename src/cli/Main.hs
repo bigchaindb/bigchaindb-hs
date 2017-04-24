@@ -28,7 +28,7 @@ parseCmd = subparser $
   where
     methods = Map.toList API.methods
     apiMethod c h = command c $ info (parseMethod c) (progDesc h)
-    parseMethod c = API.callMethod c <$> argument jsonArg (metavar "JSON")
+    parseMethod c = API.runMethod c <$> argument jsonArg (metavar "JSON")
 
 
 jsonArg :: ReadM Value
