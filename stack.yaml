@@ -1,10 +1,10 @@
 resolver: lts-7.15
 packages:
     - .
-    - ../../cryptoconditions-hs
 extra-deps:
     - base58-bytestring-0.1.0
     - aeson-quick-0.1.1.2
+    - cryptoconditions-0.1.0.0
 
 # Override default flag values for local packages and extra-deps
 flags: {}
