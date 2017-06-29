@@ -19,25 +19,14 @@ import BigchainDB.API
 import BigchainDB.CryptoConditions
 import BigchainDB.Crypto
 import BigchainDB.Prelude
+import BigchainDB.Transaction
 
 
 main :: IO ()
-main = defaultMain $ testGroup "Tests" [ apiTests
-                                       , txTests
+main = defaultMain $ testGroup "Tests" [ txTests
                                        , dslParserTests
                                        , dslSerializerTests
                                        ]
-
-
-apiTests :: TestTree
-apiTests = testGroup "Test the JSON API"
-  [
-  ]
-  where
-    diff ref new = ["colordiff", "-u", ref, new]
-    run name file act =
-      let out = file ++ ".out"
-       in goldenVsFileDiff name diff file out (act >>= BS.writeFile out)
 
 
 txTests :: TestTree
@@ -99,14 +88,15 @@ dslSerializerTests = testGroup "CryptoConditions DSL Serializer"
   ]
 
 
+alice, bob :: Text
+alice = "3fyz4CveiiUvQKpjwFS3ghEBXNVkKrFbaEfzHRXKP4MH"
+bob = "7q5ci6QWS7RfxdAtsAnvxc5ySiZCzepxKzfaoJwzqc6q"
+
+
 ed2Alice, ed2Bob :: CryptoCondition
 ed2Alice = ed25519Condition pkAlice
 ed2Bob = ed25519Condition pkBob
 
-alice, bob :: Text
-alice = "7uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1"
-bob = "DCBsceTfmZXL5d9t3enc7VPdYpPETixD12qKXs53oW6Q"
 
 pkAlice, pkBob :: Ed2.PublicKey
-pkAlice = let (PK k) = unsafeParseKey alice in k
-pkBob = let (PK k) = unsafeParseKey bob in k
+[PK pkAlice, PK pkBob] = unsafeParseKey <$> [alice, bob]

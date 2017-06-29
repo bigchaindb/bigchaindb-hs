@@ -14,6 +14,8 @@ import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Ptr
 
+import Lens.Micro
+
 import BigchainDB.API as API
 import BigchainDB.Prelude
 
@@ -48,9 +50,8 @@ jsonRPC = toFFI $ pure . jsonRPC'
 
 jsonRPC' :: BS.ByteString -> BS.ByteString
 jsonRPC' bs =
-  let res = case eitherDecodeStrict bs of
-                 Left err -> wrapJsonError (parseError err)
-                 Right res -> runJsonRpc val
-   in toStrict $ encode res
+  let parsed = over _Left parseError $ eitherDecodeStrict bs
+      result = parsed >>= runJsonRpc
+   in toStrict $ encode $ wrapJson result
   where
     parseError = BDBError (-32700) Null

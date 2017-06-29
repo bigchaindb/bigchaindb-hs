@@ -90,10 +90,10 @@ generateKeyPair _ = do
 
 createTx :: JsonMethod
 createTx = params $ \obj -> do
-  act <- TX.mkCreateTx <$> obj .:? "asset" .!= mempty
+  act <- TX.mkCreateTx <$> obj .:? "asset" .!= TX.emptyObject
                        <*> obj .:  "creator"
                        <*> obj .:  "outputs"
-                       <*> obj .:? "metadata" .!= mempty
+                       <*> obj .:? "metadata" .!= TX.emptyObject
   pure $ toJSON <$> act
 
 

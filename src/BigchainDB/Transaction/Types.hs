@@ -15,17 +15,21 @@ module BigchainDB.Transaction.Types
   , Asset(..)
   , Condition(..)
   , Input(..)
+  , NonEmptyObject
   , Operation(..)
   , Output(..)
   , Transaction(..)
   , Txid
+  , emptyObject
+  , encodeDeterm
+  , removeSigs
   , nullOutputLink
   , txidAndJson
   ) where
 
-import Data.Aeson
+import Data.Aeson.Quick hiding (emptyObject)
 import Data.Aeson.Encode.Pretty
-import Data.Aeson.Types
+import Data.Aeson.Types hiding (emptyObject)
 import Data.ByteString.Lazy (toStrict)
 import Data.Char (isHexDigit)
 import qualified Data.Text as T
@@ -84,7 +88,7 @@ instance FromJSON Operation where
 -- TODO: Any way to type create vs transfer?
 --
 data Transaction f =
-  Tx Operation Asset [Input f] [Output] Object
+  Tx Operation Asset [Input f] [Output] NonEmptyObject
   deriving (Show)
 
 
@@ -105,13 +109,22 @@ txidAndJson (Tx op asset inputs outputs metadata) =
                , "outputs" .= outputs
                , "metadata" .= metadata
                , "asset" .= asset
+               , "version" .= String "1.0"
                ]
       inputsNoSigs = (\(Input f _) -> Input f Null) <$> inputs
       txNoSigs = object (("inputs" .= inputsNoSigs) : common)
-      txid = Txid $ T.pack $ sha3 $ toStrict $ encodePretty' determ txNoSigs
-      determ = defConfig {confCompare=compare, confIndent=Spaces 0}
+      txid = Txid $ T.pack $ sha3 $ encodeDeterm txNoSigs
    in (txid, tx)
 
+
+encodeDeterm :: ToJSON v => v -> ByteString
+encodeDeterm =
+  let determ = defConfig {confCompare = compare, confIndent = Spaces 0}
+   in toStrict . encodePretty' determ
+
+
+removeSigs :: Value -> Value
+removeSigs val = build "{inputs:[{fulfills}]}" val $ [Null] -- repeat Null
 
 --------------------------------------------------------------------------------
 --
@@ -179,9 +192,28 @@ instance ToJSON UnsignedTransaction where
 
 
 --------------------------------------------------------------------------------
+-- NonEmptyObject
+--
+-- Either Null or a non empty object
+--
+newtype NonEmptyObject = NEO (Maybe Object)
+  deriving (Show)
+
+instance ToJSON NonEmptyObject where
+  toJSON (NEO o) = toJSON o
+
+instance FromJSON NonEmptyObject where
+  parseJSON Null = pure emptyObject
+  parseJSON (Object o) =
+    if o == mempty then fail "may not be empty (use null)"
+                   else pure $ NEO (Just o)
+
+emptyObject = NEO Nothing
+
+--------------------------------------------------------------------------------
 -- Asset
 --
-data Asset = AssetDefinition Object | AssetLink Txid
+data Asset = AssetDefinition NonEmptyObject | AssetLink Txid
   deriving (Show)
 
 
@@ -251,9 +283,10 @@ data Output = Output Condition Amount
 
 
 instance ToJSON Output where
-  toJSON (Output cond amount) =
-    object [ "condition" .= cond
+  toJSON (Output (Condition c) amount) =
+    object [ "condition" .= Condition c
            , "amount" .= amount
+           , "public_keys" .= getConditionPubkeys c
            ]
 
 
@@ -264,7 +297,7 @@ instance FromJSON Output where
 
 
 --------------------------------------------------------------------------------
--- Fulfillment Template - Details needed to sign
+-- Output Conditions
 --
 newtype Condition = Condition CryptoCondition
   deriving (Show)
@@ -272,18 +305,14 @@ newtype Condition = Condition CryptoCondition
 
 instance ToJSON Condition where
   toJSON (Condition c) =
-    let (expr, locals) = serializeDSL c
-    in object [ "structure" .= expr
-              , "pubkeys" .= locals
-              ]
-
+    object [ "details" .= getConditionDetails c
+           , "uri" .= getConditionURI c
+           ]
 
 instance FromJSON Condition where
-  parseJSON = withObject "fulfillmentTemplate" $ \obj -> do
-    econd <- deserializeDSL <$> obj .: "structure"
-                            <*> obj .: "pubkeys"
-    let econd' = withExcept show econd
-    Condition <$> exceptToFail econd'
+  parseJSON = withObject "condition" $ \obj -> do
+    details <- parseConditionDetails =<< obj .: "details"
+    pure $ Condition details
 
 
 --------------------------------------------------------------------------------

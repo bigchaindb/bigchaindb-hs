@@ -29,6 +29,7 @@ library
                        BigchainDB.Exceptions
   build-depends:       base,
                        aeson,
+                       aeson-quick,
                        text,
                        bytestring,
                        base58-bytestring,

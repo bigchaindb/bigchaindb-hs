@@ -16,7 +16,9 @@ import Control.Applicative as CA
 import Control.Monad.Trans.Except as TE
 import Control.Monad.Trans.Class as TC
 
+import Data.ByteString as ALL (ByteString)
 import Data.Functor.Identity
+import Data.Maybe as ALL (fromJust)
 import Data.Monoid as DM
 
 import BigchainDB.Exceptions as ALL

@@ -14,6 +14,7 @@ import qualified Crypto.PubKey.Ed25519 as Ed2
 import Data.Aeson
 
 import qualified Data.ByteString.Char8 as C8
+import Data.ByteString.Lazy (toStrict)
 import qualified Data.Text as T
 
 import Lens.Micro
@@ -28,8 +29,8 @@ import BigchainDB.Transaction.Types as TTE
   hiding (SignedTransaction(..), UnsignedTransaction(..))
 
 
-mkCreateTx :: Object -> PublicKey -> [(Amount, T.Text)]
-           -> Object -> Except BDBError UnsignedTransaction
+mkCreateTx :: NonEmptyObject -> PublicKey -> [(Amount, T.Text)]
+           -> NonEmptyObject -> Except BDBError UnsignedTransaction
 mkCreateTx assetData (PK creator) outputSpecs metadata = do
     let ffill = Condition $ ed25519Condition creator
         asset = AssetDefinition assetData
@@ -47,19 +48,19 @@ signCondition msg cond (SK sk) =
   in fulfillEd25519 pk sig cond
 
 
-signInput :: SecretKey -> Txid -> Input Condition
+signInput :: SecretKey -> ByteString -> Input Condition
           -> Except BDBError (Input T.Text)
-signInput sk txid (Input l (Condition cond)) =
-  let msg = C8.pack $ show (l, txid)
-      fcond = signCondition msg cond sk
+signInput sk msg (Input l (Condition cond)) =
+  let fcond = signCondition msg cond sk
       mff = getFulfillmentBase64 fcond
    in maybe (throwE missingPrivateKeys) (return . Input l) mff
 
 
 signTx :: SecretKey -> UnsignedTransaction -> Except BDBError SignedTransaction
-signTx sk (UnsignedTx txid jsonVal tx) = do
+signTx sk unsigned@(UnsignedTx txid jsonVal tx) = do
   let (Tx op asset inputs outputs metadata) = tx
-  signedInputs <- mapM (signInput sk txid) inputs
+  let msg = encodeDeterm $ removeSigs $ toJSON unsigned
+  signedInputs <- mapM (signInput sk msg) inputs
   let signedTx = Tx op asset signedInputs outputs metadata
       signedVal = set (key "inputs") (toJSON signedInputs) jsonVal
       -- TODO: test encode signedTx == signedVal
