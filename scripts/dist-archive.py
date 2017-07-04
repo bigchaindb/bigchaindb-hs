@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import os.path
@@ -13,10 +13,10 @@ def cmd(*args, **kwargs):
     p = subprocess.Popen(args, stdout=subprocess.PIPE,
                                stdin=stdin and subprocess.PIPE)
     if stdin:
-        p.stdin.write(stdin)
+        p.stdin.write(stdin.encode())
         p.stdin.close()
     assert p.wait() == 0
-    return p.stdout.read()
+    return p.stdout.read().decode()
 
 
 def get_objects(so_in):
@@ -41,7 +41,7 @@ def do_relocations(so_in, objects):
     for path in list(rpaths):
         objs = objects.get(path)
         if not objs:
-            print >>sys.stderr, "No objects for path:", path 
+            print("No objects for path:", path, file=sys.stderr)
         else:
             for obj in objs:
                 cmd('cp', os.path.join(path, obj), 'libs')
@@ -58,5 +58,5 @@ cmd('cp', so, '.')
 objects = get_objects(so)
 so = os.path.basename(so)
 do_relocations(so, objects)
-print os.path.abspath(so)
+print(os.path.abspath(so))
 

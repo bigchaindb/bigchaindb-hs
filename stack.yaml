@@ -12,6 +12,6 @@ flags: {}
 # Extra package databases containing global packages
 extra-package-dbs: []
 
-# Extra directories used by stack for building
-# extra-include-dirs: [/path/to/dir]
-# extra-lib-dirs: [/path/to/dir]
+ghc-options:
+    package-name: -lHSrts-ghc8.0.1
+
