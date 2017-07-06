@@ -26,6 +26,7 @@ methods :: Map.Map String (JsonMethod, String)
 methods = Map.fromList
   [ ("generateKeyPair", (generateKeyPair, "Generate ed25519 key pair"))
   , ("createTx", (createTx, "Generate a CREATE transaction"))
+  , ("transferTx", (transferTx, "Generate a TRANSFER transaction"))
   , ("signTx", (signTx, "Sign a transaction"))
   , ("validateTx", (validateTx, "Validate a transaction (not against DB)"))
   , ("validateCondition", (validateCondition, "Validate condition"))
@@ -159,3 +160,12 @@ readFulfillment = params $ \obj -> do
     --if validate (getConditionURI ffill) ffill msg
     --   then pure $ object ["result" .= TX.Condition ffill]
     --   else throwE "Invalid fulfillment"
+
+
+transferTx :: JsonMethod
+transferTx = params $ \obj -> do
+  act <- TX.mkTransferTx <$> obj .:  "spends"
+                         <*> obj .:? "links" .!= []
+                         <*> obj .:  "outputs"
+                         <*> obj .:? "metadata" .!= TX.emptyObject
+  pure $ toJSON <$> act

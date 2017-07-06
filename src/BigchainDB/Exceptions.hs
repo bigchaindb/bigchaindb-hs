@@ -29,5 +29,9 @@ txCreateError :: String -> BDBError
 txCreateError = BDBError 110 Null
 
 
+txTransferError :: String -> BDBError
+txTransferError = BDBError 111 Null
+
+
 missingPrivateKeys :: BDBError
-missingPrivateKeys = BDBError 111 Null "Missing private keys"
+missingPrivateKeys = BDBError 120 Null "Missing private keys"

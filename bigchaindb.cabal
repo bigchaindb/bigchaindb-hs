@@ -18,6 +18,7 @@ library
   exposed-modules:     BigchainDB.API,
                        BigchainDB.Transaction,
                        BigchainDB.Transaction.Types,
+                       BigchainDB.Transaction.Transfer,
                        BigchainDB.Prelude,
                        BigchainDB.Crypto,
                        BigchainDB.Crypto.B58Keys,

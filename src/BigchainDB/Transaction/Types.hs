@@ -16,11 +16,14 @@ module BigchainDB.Transaction.Types
   , Condition(..)
   , ConditionDetails(..)
   , Input(..)
-  , NonEmptyObject
   , Operation(..)
   , Output(..)
+  , OutputLink(..)
+  , OutputSpec
   , Transaction(..)
   , Txid
+  , Metadata
+  , AssetData
   , emptyObject
   , encodeDeterm
   , removeSigs
@@ -43,8 +46,6 @@ import BigchainDB.Crypto
 import BigchainDB.CryptoConditions
 import BigchainDB.Prelude
 
-
-import Debug.Trace
 
 --------------------------------------------------------------------------------
 -- Transaction ID
@@ -219,10 +220,13 @@ instance FromJSON NonEmptyObject where
 
 emptyObject = NEO Nothing
 
+type Metadata = NonEmptyObject
+type AssetData = NonEmptyObject
+
 --------------------------------------------------------------------------------
 -- Asset
 --
-data Asset = AssetDefinition NonEmptyObject | AssetLink Txid
+data Asset = AssetDefinition AssetData | AssetLink Txid
   deriving (Show)
 
 
@@ -311,6 +315,8 @@ instance FromJSON Output where
            <*> (obj .: "amount")
 
 
+type OutputSpec = (Amount, T.Text)
+
 --------------------------------------------------------------------------------
 -- Output Conditions
 --
@@ -354,13 +360,13 @@ data OutputLink = OutputLink Txid Int
 
 instance FromJSON OutputLink where
   parseJSON = withObject "fulfills" $ \obj ->
-    OutputLink <$> (obj .: "txid") <*> (obj .: "output")
+    OutputLink <$> (obj .: "transaction_id") <*> (obj .: "output_index")
 
 
 instance ToJSON OutputLink where
   toJSON (OutputLink (Txid "") _) = Null
   toJSON (OutputLink (Txid txid) off) =
-    object ["txid" .= txid, "output" .= off]
+    object ["transaction_id" .= txid, "output_index" .= off]
 
 
 nullOutputLink :: OutputLink

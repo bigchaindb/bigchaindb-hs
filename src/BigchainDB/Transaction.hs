@@ -5,7 +5,6 @@ module BigchainDB.Transaction
   , mkCreateTx
   , signTx
   , signCondition
-  , createOutput
   ) where
 
 import qualified Crypto.PubKey.Ed25519 as Ed2
@@ -24,12 +23,14 @@ import BigchainDB.CryptoConditions
 import BigchainDB.Transaction.Types as TT
 import BigchainDB.Prelude
 
+import BigchainDB.Transaction.Common as TTE
+import BigchainDB.Transaction.Transfer as TTE
 import BigchainDB.Transaction.Types as TTE
   hiding (SignedTransaction(..), UnsignedTransaction(..))
 
 
-mkCreateTx :: NonEmptyObject -> PublicKey -> [(Amount, T.Text)]
-           -> NonEmptyObject -> Except BDBError UnsignedTransaction
+mkCreateTx :: AssetData -> PublicKey -> [OutputSpec]
+           -> Metadata -> Except BDBError UnsignedTransaction
 mkCreateTx assetData (PK creator) outputSpecs metadata = do
     let ffill = Details $ ed25519Condition creator
         asset = AssetDefinition assetData
@@ -64,9 +65,3 @@ signTx sk unsigned@(UnsignedTx txid jsonVal tx) = do
       signedVal = set (key "inputs") (toJSON signedInputs) jsonVal
       -- TODO: test encode signedTx == signedVal
   return $ SignedTx txid signedVal signedTx
-
-
-createOutput :: (Amount, T.Text) -> Except BDBError Output
-createOutput (amount, expr) = do
-  c <- parseDSL expr
-  return $ Output (Condition c) amount
