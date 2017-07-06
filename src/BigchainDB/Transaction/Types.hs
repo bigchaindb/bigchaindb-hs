@@ -44,6 +44,8 @@ import BigchainDB.CryptoConditions
 import BigchainDB.Prelude
 
 
+import Debug.Trace
+
 --------------------------------------------------------------------------------
 -- Transaction ID
 --
@@ -124,8 +126,14 @@ encodeDeterm =
    in toStrict . encodePretty' determ
 
 
-removeSigs :: Value -> Value -- TODO: THIS IS BROKEN
-removeSigs val = build "{inputs:[{fulfillment}]}" val $ [Null] -- repeat Null
+removeSigs :: Value -> Value
+removeSigs val = build "{inputs:[{fulfillment}]}" val nulls
+  where
+    -- It's neccesary to apply a workaround here; the Data.Aeson.Quick.build
+    -- function tries to convert our Nulls array to a Vector, which is strict
+    -- in it's length. For this reason, we just create a really long Array of
+    -- null values. It'll only be allocated once.
+    nulls = toJSON $ take 10000 $ repeat Null
 
 --------------------------------------------------------------------------------
 --
