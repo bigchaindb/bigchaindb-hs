@@ -33,16 +33,16 @@ txTests :: TestTree
 txTests = testGroup "Test Transaction ID validation"
   [
      testCase "tx-right-id-succeeds" $ do
-         let res = runExcept $ do
-               tx <- createTx createSpec
-               validateTx $ "{tx}" .% tx
-         res @?= Right (String "ok")
+       res <- runExceptT $ do 
+         tx <- createTx createSpec
+         validateTx $ "{tx}" .% tx
+       res @?= Right (String "ok")
   ,
      testCase "tx-wrong-id-fails" $ do
-         let res = runExcept $ do
-               tx <- createTx createSpec
-               validateTx $ "{tx}" .% (build "{id}" tx badId)
-         res @?= Left (BDBError 100 Null "Txid mismatch")
+       res <- runExceptT $ do
+         tx <- createTx createSpec
+         validateTx $ "{tx}" .% (build "{id}" tx badId)
+       res @?= Left (BDBError 100 Null "Txid mismatch")
   ]
   where
     badId = "FFFd1a44abcf0a18b7aec2d406c11ed0cb0bd371847145be7822c76077ca5514" :: Text
