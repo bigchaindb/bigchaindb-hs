@@ -13,5 +13,5 @@ flags: {}
 extra-package-dbs: []
 
 ghc-options:
-    package-name: -lHSrts-ghc8.0.1
+    bigchaindb: -lHSrts-ghc8.0.1
 
