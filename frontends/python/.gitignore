@@ -1,8 +1,0 @@
-__pycache__/
-*.pyc
-*.so
-*.so.*
-*.cabal
-dist
-
-.cache
