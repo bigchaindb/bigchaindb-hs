@@ -45,13 +45,14 @@ foreign import ccall "dynamic" mkFun :: FunPtr (Ptr a -> IO CLLong)
 
 
 jsonRPC :: FFIMethod
-jsonRPC = toFFI $ pure . jsonRPC'
+jsonRPC = toFFI jsonRPC'
 
 
-jsonRPC' :: BS.ByteString -> BS.ByteString
-jsonRPC' bs =
-  let parsed = over _Left parseError $ eitherDecodeStrict bs
-      result = parsed >>= runJsonRpc
-   in toStrict $ encode $ wrapJson result
+jsonRPC' :: BS.ByteString -> IO BS.ByteString
+jsonRPC' bs = do
+  result <- runExceptT $ do
+    parsed <- either (throwE . parseError) pure $ eitherDecodeStrict bs
+    runJsonRpc parsed
+  pure $ toStrict $ encode $ wrapJson result
   where
     parseError = BDBError (-32700) Null

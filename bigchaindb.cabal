@@ -47,7 +47,7 @@ library
   hs-source-dirs:      src
   if flag(so)
     exposed-modules:   BigchainDB.FFI
-    --extra-libraries:   HSrts-ghc8.0.1
+    extra-libraries:   HSrts-ghc8.0.1
     C-sources:         src/module_init.c
     cpp-options:       -DMODULE=BigchainDB
   default-language:    Haskell2010

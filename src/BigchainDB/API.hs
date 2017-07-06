@@ -19,8 +19,7 @@ import Lens.Micro
 
 import System.IO.Unsafe
 
-
-type JsonMethod = Value -> Except BDBError Value
+type JsonMethod = Value -> ExceptT BDBError IO Value
 
 
 methods :: Map.Map String (JsonMethod, String)
@@ -37,10 +36,10 @@ methods = Map.fromList
   ]
 
 
-runJsonRpc :: Value -> Either BDBError Value
+runJsonRpc :: Value -> ExceptT BDBError IO Value
 runJsonRpc val = do
-  (name, params) <- either (Left . invalidRequest) pure $
-                       parseEither parseRequest val
+  let res = parseEither parseRequest val
+  (name, params) <- ExceptT $ pure $ over _Left invalidRequest res
   runMethod name params
   where
     invalidRequest str = BDBError (-32600) Null str
@@ -48,11 +47,11 @@ runJsonRpc val = do
       (,) <$> obj .: "method" <*> obj .: "params"
 
 
-runMethod :: String -> Value -> Either BDBError Value
+runMethod :: String -> Value -> ExceptT BDBError IO Value
 runMethod name params = do
-  (method,_) <- maybe (Left $ methodNotFound name) pure $
+  (method,_) <- maybe (throwE $ methodNotFound name) pure $
                        Map.lookup name methods
-  runExcept $ method params
+  method params
   where
     methodNotFound name = BDBError (-32601) (toJSON name) "Method not found"
 
@@ -73,18 +72,18 @@ ok :: Value
 ok = String "ok"
 
 
-params :: (Object -> Parser (Except BDBError Value)) -> Value -> Except BDBError Value
+params :: (Object -> Parser (Except BDBError Value)) -> Value -> ExceptT BDBError IO Value
 params parse val = do
   let res = parseEither (withObject "object" parse) val
   act <- either (throwE . invalidParams) pure res
-  act
+  either throwE pure $ runExcept act
   where
     invalidParams str = BDBError (-32602) Null str
 
 
 generateKeyPair :: JsonMethod
 generateKeyPair _ = do
-  let (pk, sk) = unsafePerformIO genKeyPair
+  (pk, sk) <- lift genKeyPair
   return $ object ["public_key" .= pk, "secret_key" .= sk]
 
 
@@ -154,7 +153,7 @@ readFulfillment :: JsonMethod
 readFulfillment = params $ \obj -> do
   ff <- encodeUtf8 <$> obj .: "fulfillment"
   --msg <- encodeUtf8 <$> obj .:? "message"
-  return $ do
+  pure $ do
     ffill <- readStandardFulfillmentBase64 ff
     pure $ toJSON $ TX.Condition ffill
     --if validate (getConditionURI ffill) ffill msg

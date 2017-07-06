@@ -14,6 +14,7 @@ module BigchainDB.Transaction.Types
   , UnsignedTransaction(..)
   , Asset(..)
   , Condition(..)
+  , ConditionDetails(..)
   , Input(..)
   , NonEmptyObject
   , Operation(..)
@@ -111,7 +112,7 @@ txidAndJson (Tx op asset inputs outputs metadata) =
                , "asset" .= asset
                , "version" .= String "1.0"
                ]
-      inputsNoSigs = (\(Input f _) -> Input f Null) <$> inputs
+      inputsNoSigs = (\(Input f ob _) -> Input f ob Null) <$> inputs
       txNoSigs = object (("inputs" .= inputsNoSigs) : common)
       txid = Txid $ T.pack $ sha3 $ encodeDeterm txNoSigs
    in (txid, tx)
@@ -123,8 +124,8 @@ encodeDeterm =
    in toStrict . encodePretty' determ
 
 
-removeSigs :: Value -> Value
-removeSigs val = build "{inputs:[{fulfills}]}" val $ [Null] -- repeat Null
+removeSigs :: Value -> Value -- TODO: THIS IS BROKEN
+removeSigs val = build "{inputs:[{fulfillment}]}" val $ [Null] -- repeat Null
 
 --------------------------------------------------------------------------------
 --
@@ -174,7 +175,7 @@ instance ToJSON SignedTransaction where
 -- and having template fulfillments
 --
 data UnsignedTransaction =
-  UnsignedTx Txid Value (Transaction Condition)
+  UnsignedTx Txid Value (Transaction ConditionDetails)
   deriving (Show)
 
 
@@ -230,18 +231,20 @@ parseAsset Transfer val = AssetLink <$> val .: "id"
 --------------------------------------------------------------------------------
 -- Input with polymorphic fulfillment type (signed or unsigned)
 --
-data Input ffill = Input OutputLink ffill
+data Input ffill = Input OutputLink OwnersBefore ffill
   deriving (Show)
 
 
 instance (ToJSON ffill) => ToJSON (Input ffill) where
-  toJSON (Input f ff) =
-    object ["fulfills" .= f, "fulfillment" .= ff]
+  toJSON (Input f ob ff) =
+    object ["fulfills" .= f, "fulfillment" .= ff, "owners_before" .= ob]
 
 
 instance (FromJSON ffill) => FromJSON (Input ffill) where
   parseJSON = withObject "input" $ \obj ->
-    Input <$> (obj .: "fulfills") <*> (obj .: "fulfillment")
+    Input <$> (obj .: "fulfills")
+          <*> (obj .: "owners_before")
+          <*> (obj .: "fulfillment")
 
 
 -- | Parse inputs depending on transaction operation
@@ -251,9 +254,13 @@ parseInputs Create [obj] = do
   fulfillsVal <- obj .: "fulfills"
   let ffills | fulfillsVal == Null = pure nullOutputLink
              | otherwise = fail "CREATE tx does not link to an output"
-  input <- Input <$> ffills <*> (obj .: "fulfillment")
+  input <- Input <$> ffills <*> (obj .: "owners_before")
+                            <*> (obj .: "fulfillment")
   pure [input]
 parseInputs Create _ = fail "CREATE tx has exactly one input"
+
+
+type OwnersBefore = [PublicKey]
 
 
 --------------------------------------------------------------------------------
@@ -305,14 +312,29 @@ newtype Condition = Condition CryptoCondition
 
 instance ToJSON Condition where
   toJSON (Condition c) =
-    object [ "details" .= getConditionDetails c
+    object [ "details" .= Details c
            , "uri" .= getConditionURI c
            ]
 
 instance FromJSON Condition where
   parseJSON = withObject "condition" $ \obj -> do
-    details <- parseConditionDetails =<< obj .: "details"
-    pure $ Condition details
+    Details c <- obj .: "details"
+    pure $ Condition c
+
+
+--------------------------------------------------------------------------------
+-- Condition Details
+--
+newtype ConditionDetails = Details CryptoCondition
+  deriving (Show)
+
+
+instance ToJSON ConditionDetails where
+  toJSON (Details c) = getConditionDetails c
+
+
+instance FromJSON ConditionDetails where
+  parseJSON val = Details <$> withObject "details" parseConditionDetails val
 
 
 --------------------------------------------------------------------------------

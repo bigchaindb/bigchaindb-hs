@@ -8,7 +8,6 @@ module BigchainDB.Transaction
   , createOutput
   ) where
 
-
 import qualified Crypto.PubKey.Ed25519 as Ed2
 
 import Data.Aeson
@@ -32,11 +31,11 @@ import BigchainDB.Transaction.Types as TTE
 mkCreateTx :: NonEmptyObject -> PublicKey -> [(Amount, T.Text)]
            -> NonEmptyObject -> Except BDBError UnsignedTransaction
 mkCreateTx assetData (PK creator) outputSpecs metadata = do
-    let ffill = Condition $ ed25519Condition creator
+    let ffill = Details $ ed25519Condition creator
         asset = AssetDefinition assetData
     when (null outputSpecs) $ throwE $ txCreateError "Outputs cannot be empty"
     outputs <- mapM createOutput outputSpecs
-    let tx = Tx Create asset [Input nullOutputLink ffill] outputs metadata
+    let tx = Tx Create asset [Input nullOutputLink [PK creator] ffill] outputs metadata
         (txid, jsonVal) = txidAndJson tx
     return $ UnsignedTx txid jsonVal tx
 
@@ -48,12 +47,12 @@ signCondition msg cond (SK sk) =
   in fulfillEd25519 pk sig cond
 
 
-signInput :: SecretKey -> ByteString -> Input Condition
+signInput :: SecretKey -> ByteString -> Input ConditionDetails
           -> Except BDBError (Input T.Text)
-signInput sk msg (Input l (Condition cond)) =
+signInput sk msg (Input l ob (Details cond)) =
   let fcond = signCondition msg cond sk
       mff = getFulfillmentBase64 fcond
-   in maybe (throwE missingPrivateKeys) (return . Input l) mff
+   in maybe (throwE missingPrivateKeys) (return . Input l ob) mff
 
 
 signTx :: SecretKey -> UnsignedTransaction -> Except BDBError SignedTransaction

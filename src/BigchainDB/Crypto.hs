@@ -28,6 +28,6 @@ genKeyPair = do
   -- TODO: scrubbed bytes array?
   let (bs,_) = randomBytesGenerate 32 drg
       (CryptoPassed sk) = Ed2.secretKey (bs::ByteString)
-  return (PK $ Ed2.toPublic sk, SK sk)
+  pure (PK $ Ed2.toPublic sk, SK sk)
   
 

@@ -26,12 +26,11 @@ getConditionDetails :: CryptoCondition -> Value
 getConditionDetails (Ed25519 pk _) =
   object [ "type" .= ("ed25519-sha-256" :: String)
          , "public_key" .= PK pk
-         , "signature" .= Null
          ]
 getConditionDetails (Threshold n subs) = 
   object [ "type" .= String "threshold-sha-256"
          , "threshold" .= n
-         , "subfulfillments" .= (getConditionDetails <$> subs)
+         , "subconditions" .= (getConditionDetails <$> subs)
          ]
 
 
@@ -43,7 +42,6 @@ parseConditionDetails obj = do
          (PK pk) <- obj .: "public_key"
          pure $ Ed25519 pk Nothing
        "threshold-sha-256" -> do
-         subffills <- obj .: "subfulfillments"
-         subconds <- mapM parseConditionDetails subffills
+         subconds <- obj .: "subconditions" >>= mapM parseConditionDetails
          Threshold <$> obj .: "threshold" <*> pure subconds
        _ -> fail ("Unsupported condition type: " ++ condType)

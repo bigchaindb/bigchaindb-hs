@@ -20,7 +20,7 @@ import System.Exit
 import System.IO
 
 
-type Method = Either BDBError Value
+type Method = ExceptT BDBError IO Value
 
 parseCmd :: Parser Method
 parseCmd = subparser $
@@ -47,7 +47,8 @@ parseOpts = info (parser <**> helper) desc
 main :: IO ()
 main = do
   (pretty, act) <- execParser parseOpts
-  case act of
+  res <- runExceptT act
+  case res of
        Left err -> print err >> exitFailure
        Right val -> do
           let enc = if pretty then encodePretty' pconf else encode
