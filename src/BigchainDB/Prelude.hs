@@ -20,6 +20,7 @@ import Data.ByteString as ALL (ByteString)
 import Data.Functor.Identity
 import Data.Maybe as ALL (fromJust)
 import Data.Monoid as DM
+import Data.Set as ALL (Set)
 
 import BigchainDB.Exceptions as ALL
 

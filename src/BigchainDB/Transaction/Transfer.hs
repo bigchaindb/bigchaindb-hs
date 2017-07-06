@@ -14,6 +14,7 @@ import Data.Aeson.Types hiding (emptyObject)
 import Data.ByteString.Lazy (toStrict)
 import Data.Char (isHexDigit)
 import Data.List (nub)
+import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.Text.Read
 
@@ -27,14 +28,21 @@ import BigchainDB.Transaction.Common
 import BigchainDB.Transaction.Types
 
 
-mkTransferTx :: [AnyTransaction] -> [OutputLink] -> [OutputSpec] ->
+mkTransferTx :: Set AnyTransaction -> Set OutputLink -> [OutputSpec] ->
                 Metadata -> Except BDBError UnsignedTransaction
-mkTransferTx [] _ _ _ = throwE $ txTransferError "spends cannot be empty"
-mkTransferTx _ _ [] _ = throwE $ txTransferError "outputs cannot be empty"
 mkTransferTx spends links outputSpecs metadata = do
-  let inputs = spends >>= txToInputs
+
+  when (spends == Set.empty) $
+    throwE $ txTransferError "spends cannot be empty"
+
+  when (outputSpecs == []) $
+    throwE $ txTransferError "spends cannot be empty"
+
+  let spendsList = Set.toList spends
+      inputs = Set.toList spends >>= txToInputs
+
   outputs <- mapM createOutput outputSpecs
-  assetLink <- getAssetLink spends
+  assetLink <- getAssetLink spendsList
   let tx = Tx Transfer assetLink inputs outputs metadata
       (txid, jsonVal) = txidAndJson tx
   return $ UnsignedTx txid jsonVal tx

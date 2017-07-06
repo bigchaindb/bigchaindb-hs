@@ -51,7 +51,7 @@ import BigchainDB.Prelude
 -- Transaction ID
 --
 newtype Txid = Txid T.Text
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 
 instance ToJSON Txid where
@@ -70,7 +70,7 @@ instance FromJSON Txid where
 -- Operation
 --
 data Operation = Create | Transfer
-  deriving (Show, Eq)
+  deriving (Show, Ord, Eq)
 
 
 instance ToJSON Operation where
@@ -93,8 +93,7 @@ instance FromJSON Operation where
 --
 data Transaction f =
   Tx Operation Asset [Input f] [Output] NonEmptyObject
-  deriving (Show)
-
+  deriving (Eq, Show)
 
 parseTx :: FromJSON f => Value -> Parser (Transaction f)
 parseTx = withObject "transaction" $ \obj -> do
@@ -141,7 +140,7 @@ removeSigs val = build "{inputs:[{fulfillment}]}" val nulls
 
 data AnyTransaction = AnyS SignedTransaction
                     | AnyU UnsignedTransaction
-  deriving (Show)
+  deriving (Eq, Show)
 
 
 instance FromJSON AnyTransaction where
@@ -152,6 +151,9 @@ instance FromJSON AnyTransaction where
          _                 -> AnyU <$> parseJSON value
 
 
+instance Ord AnyTransaction where
+  a >= b = getTxid a >= getTxid b
+
 --------------------------------------------------------------------------------
 -- Signed transaction
 --
@@ -160,7 +162,7 @@ instance FromJSON AnyTransaction where
 --
 data SignedTransaction =
   SignedTx Txid Value (Transaction T.Text)
-  deriving (Show)
+  deriving (Eq, Show)
 
 
 instance FromJSON SignedTransaction where
@@ -177,6 +179,9 @@ instance ToJSON SignedTransaction where
   toJSON (SignedTx _ val _) = val
 
 
+getTxid (AnyS (SignedTx txid _ _)) = txid
+getTxid (AnyU (UnsignedTx txid _ _)) = txid
+
 --------------------------------------------------------------------------------
 -- Unsigned transaction
 --
@@ -185,7 +190,7 @@ instance ToJSON SignedTransaction where
 --
 data UnsignedTransaction =
   UnsignedTx Txid Value (Transaction ConditionDetails)
-  deriving (Show)
+  deriving (Eq, Show)
 
 
 instance FromJSON UnsignedTransaction where
@@ -207,7 +212,7 @@ instance ToJSON UnsignedTransaction where
 -- Either Null or a non empty object
 --
 newtype NonEmptyObject = NEO (Maybe Object)
-  deriving (Show)
+  deriving (Eq, Show)
 
 instance ToJSON NonEmptyObject where
   toJSON (NEO o) = toJSON o
@@ -227,7 +232,7 @@ type AssetData = NonEmptyObject
 -- Asset
 --
 data Asset = AssetDefinition AssetData | AssetLink Txid
-  deriving (Show)
+  deriving (Eq, Show)
 
 
 instance ToJSON Asset where
@@ -244,7 +249,7 @@ parseAsset Transfer val = AssetLink <$> val .: "id"
 -- Input with polymorphic fulfillment type (signed or unsigned)
 --
 data Input ffill = Input OutputLink OwnersBefore ffill
-  deriving (Show)
+  deriving (Eq, Show)
 
 
 instance (ToJSON ffill) => ToJSON (Input ffill) where
@@ -279,7 +284,7 @@ type OwnersBefore = [PublicKey]
 -- Amount
 --
 newtype Amount = Amount Word
-  deriving (Show)
+  deriving (Eq, Show)
 
 
 instance ToJSON Amount where
@@ -298,7 +303,7 @@ instance FromJSON Amount where
 -- Output
 --
 data Output = Output Condition Amount
-  deriving (Show)
+  deriving (Eq, Show)
 
 
 instance ToJSON Output where
@@ -321,7 +326,7 @@ type OutputSpec = (Amount, T.Text)
 -- Output Conditions
 --
 newtype Condition = Condition CryptoCondition
-  deriving (Show)
+  deriving (Eq, Show)
 
 
 instance ToJSON Condition where
@@ -340,7 +345,7 @@ instance FromJSON Condition where
 -- Condition Details
 --
 newtype ConditionDetails = Details CryptoCondition
-  deriving (Show)
+  deriving (Eq, Show)
 
 
 instance ToJSON ConditionDetails where
@@ -355,7 +360,7 @@ instance FromJSON ConditionDetails where
 -- Output Link - identifies an Output
 --
 data OutputLink = OutputLink Txid Int
-  deriving (Show)
+  deriving (Eq, Ord, Show)
 
 
 instance FromJSON OutputLink where

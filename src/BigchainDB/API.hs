@@ -165,7 +165,7 @@ readFulfillment = params $ \obj -> do
 transferTx :: JsonMethod
 transferTx = params $ \obj -> do
   act <- TX.mkTransferTx <$> obj .:  "spends"
-                         <*> obj .:? "links" .!= []
+                         <*> obj .:? "links" .!= mempty
                          <*> obj .:  "outputs"
                          <*> obj .:? "metadata" .!= TX.emptyObject
   pure $ toJSON <$> act
