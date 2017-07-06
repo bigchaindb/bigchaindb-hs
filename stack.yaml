@@ -12,6 +12,6 @@ flags: {}
 # Extra package databases containing global packages
 extra-package-dbs: []
 
-ghc-options:
-    bigchaindb: -lHSrts-ghc8.0.1
+#ghc-options:
+#    bigchaindb: -lHSrts-ghc8.0.1
 
