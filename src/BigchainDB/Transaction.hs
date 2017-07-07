@@ -30,15 +30,13 @@ import BigchainDB.Transaction.Types as TTE
 
 
 mkCreateTx :: AssetData -> PublicKey -> [OutputSpec]
-           -> Metadata -> Except BDBError UnsignedTransaction
+           -> Metadata -> Except BDBError Transaction
+mkCreateTx _ _ [] _ = throwE $ txCreateError "Outputs cannot be empty"
 mkCreateTx assetData (PK creator) outputSpecs metadata = do
     let ffill = Details $ ed25519Condition creator
-        asset = AssetDefinition assetData
-    when (null outputSpecs) $ throwE $ txCreateError "Outputs cannot be empty"
+        inputs = Unsigned [Input nullOutputLink [PK creator] ffill]
     outputs <- mapM createOutput outputSpecs
-    let tx = Tx Create asset [Input nullOutputLink [PK creator] ffill] outputs metadata
-        (txid, jsonVal) = txidAndJson tx
-    return $ UnsignedTx txid jsonVal tx
+    pure $ Tx (Create assetData) inputs outputs metadata
 
 
 signCondition :: C8.ByteString -> CryptoCondition -> SecretKey -> CryptoCondition
@@ -56,12 +54,10 @@ signInput sk msg (Input l ob (Details cond)) =
    in maybe (throwE missingPrivateKeys) (return . Input l ob) mff
 
 
-signTx :: SecretKey -> UnsignedTransaction -> Except BDBError SignedTransaction
-signTx sk unsigned@(UnsignedTx txid jsonVal tx) = do
-  let (Tx op asset inputs outputs metadata) = tx
-  let msg = encodeDeterm $ removeSigs $ toJSON unsigned
-  signedInputs <- mapM (signInput sk msg) inputs
-  let signedTx = Tx op asset signedInputs outputs metadata
-      signedVal = set (key "inputs") (toJSON signedInputs) jsonVal
+signTx :: SecretKey -> Transaction -> Except BDBError Transaction
+signTx sk (Tx _ (Signed _) _ _) = throwE txAlreadySigned
+signTx sk tx@(Tx asset (Unsigned inputs) outputs metadata) = do 
+  let msg = encodeDeterm $ removeSigs $ toJSON tx
+  signedInputs <- Signed <$> mapM (signInput sk msg) inputs
       -- TODO: test encode signedTx == signedVal
-  return $ SignedTx txid signedVal signedTx
+  pure $ Tx asset signedInputs outputs metadata

@@ -35,3 +35,7 @@ txTransferError = BDBError 111 Null
 
 missingPrivateKeys :: BDBError
 missingPrivateKeys = BDBError 120 Null "Missing private keys"
+
+
+txAlreadySigned :: BDBError
+txAlreadySigned = BDBError 515 Null "Transaction is already signed"

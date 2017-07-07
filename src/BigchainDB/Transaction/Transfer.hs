@@ -28,8 +28,8 @@ import BigchainDB.Transaction.Common
 import BigchainDB.Transaction.Types
 
 
-mkTransferTx :: Set AnyTransaction -> Set OutputLink -> [OutputSpec] ->
-                Metadata -> Except BDBError UnsignedTransaction
+mkTransferTx :: Set Transaction -> Set OutputLink -> [OutputSpec] ->
+                Metadata -> Except BDBError Transaction
 mkTransferTx spends links outputSpecs metadata = do
 
   when (spends == Set.empty) $
@@ -39,33 +39,27 @@ mkTransferTx spends links outputSpecs metadata = do
     throwE $ txTransferError "spends cannot be empty"
 
   let spendsList = Set.toList spends
-      inputs = Set.toList spends >>= txToInputs
+      inputs = Unsigned $ Set.toList spends >>= txToInputs
 
   outputs <- mapM createOutput outputSpecs
   assetLink <- getAssetLink spendsList
-  let tx = Tx Transfer assetLink inputs outputs metadata
-      (txid, jsonVal) = txidAndJson tx
-  return $ UnsignedTx txid jsonVal tx
+  pure $ Tx assetLink inputs outputs metadata
 
 
-getAssetLink :: [AnyTransaction] -> Except BDBError Asset
+getAssetLink :: [Transaction] -> Except BDBError Asset
 getAssetLink txs =
-  let assetIds = (getAssetId . getTx) <$> txs
+  let assetIds = getAssetId <$> txs
   in case nub assetIds of
-       [assetId] -> pure (AssetLink assetId)
+       [assetId] -> pure (Transfer assetId)
        _ -> throwE $ txTransferError "Cannot consolidate transactions with different asset IDs"
   where
-    getAssetId (_, (AssetLink txid)) = txid
-    getAssetId (txid, _) = txid
-    getTx (AnyS (SignedTx txid _ (Tx _ a _ _ _))) = (txid, a)
-    getTx (AnyU (UnsignedTx txid _ (Tx _ a _ _ _))) = (txid, a)
+    getAssetId (Tx {asset=Transfer assetId}) = assetId
+    getAssetId tx = fst $ txidAndJson tx
 
 
-txToInputs :: AnyTransaction -> [Input ConditionDetails]
-txToInputs (AnyS (SignedTx txid _ (Tx _ _ _ outputs _))) =
-  convertOutput txid <$> zip [0..] outputs
-txToInputs (AnyU (UnsignedTx txid _ (Tx _ _ _ outputs _))) =
-  convertOutput txid <$> zip [0..] outputs
+txToInputs :: Transaction -> [Input ConditionDetails]
+txToInputs tx@(Tx {outputs=outputs}) =
+  convertOutput (getTxid tx) <$> zip [0..] outputs
 
 
 convertOutput :: Txid -> (Int, Output) -> Input ConditionDetails

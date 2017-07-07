@@ -9,13 +9,11 @@
 
 module BigchainDB.Transaction.Types
   ( Amount
-  , AnyTransaction(..)
-  , SignedTransaction(..)
-  , UnsignedTransaction(..)
   , Asset(..)
   , Condition(..)
   , ConditionDetails(..)
   , Input(..)
+  , Inputs(..)
   , Operation(..)
   , Output(..)
   , OutputLink(..)
@@ -24,6 +22,7 @@ module BigchainDB.Transaction.Types
   , Txid
   , Metadata
   , AssetData
+  , getTxid
   , emptyObject
   , encodeDeterm
   , removeSigs
@@ -69,55 +68,71 @@ instance FromJSON Txid where
 --------------------------------------------------------------------------------
 -- Operation
 --
-data Operation = Create | Transfer
+data Operation = CREATE | TRANSFER
   deriving (Show, Ord, Eq)
 
 
-instance ToJSON Operation where
-  toJSON Create = String "CREATE"
-  toJSON Transfer = String "TRANSFER"
-
-
 instance FromJSON Operation where
-  parseJSON (String "CREATE") = pure Create
-  parseJSON (String "TRANSFER") = pure Transfer
-  parseJSON _ = fail "Invalid operation"
+  parseJSON (String "CREATE") = pure CREATE
+  parseJSON (String "TRANSFER") = pure TRANSFER
+  parseJSON op = fail $ "Invalid operation: " ++ show op
 
 
 --------------------------------------------------------------------------------
 -- Transaction
 --
--- Has no fromJSON instance, use AnyTransaction
---
--- TODO: Any way to type create vs transfer?
---
-data Transaction f =
-  Tx Operation Asset [Input f] [Output] NonEmptyObject
-  deriving (Eq, Show)
+data Transaction = Tx
+  { asset :: Asset
+  , inputs :: Inputs
+  , outputs :: [Output]
+  , metadata :: Metadata
+  } deriving (Eq, Show)
 
-parseTx :: FromJSON f => Value -> Parser (Transaction f)
-parseTx = withObject "transaction" $ \obj -> do
+
+instance FromJSON Transaction where
+  parseJSON = withObject "transaction" $ \obj -> do
     op <- obj .: "operation"
-    Tx <$> pure op
-       <*> (parseAsset op =<< obj .: "asset")
-       <*> (parseInputs op =<< obj .: "inputs")
-       <*> obj .: "outputs"
-       <*> obj .: "metadata"
+    tx <- Tx <$> (obj .: "asset" >>= parseAsset op)
+             <*> (obj .: "inputs" >>= parseInputs op)
+             <*> obj .: "outputs"
+             <*> obj .: "metadata"
+
+    -- Verify txid
+    mId <- obj .: "id"
+    let (Txid calcTxid) = fst (txidAndJson tx)
+    case mId of
+         Just txid ->
+           when (Txid calcTxid /= txid) $
+               fail ("Txid mismatch: " ++ T.unpack calcTxid)
+         Nothing -> pure ()
+    pure tx
 
 
-txidAndJson :: ToJSON f => Transaction f -> (Txid, Value)
-txidAndJson (Tx op asset inputs outputs metadata) =
-  let tx = object (("id" .= txid) : ("inputs" .= toJSON inputs) : common)
-      common = [ "operation" .= op
+
+instance ToJSON Transaction where
+  toJSON = snd . txidAndJson
+
+
+instance Ord Transaction where
+  tx <= tx2 = fst (txidAndJson tx) <= fst (txidAndJson tx2)
+
+    
+txidAndJson :: Transaction -> (Txid, Value)
+txidAndJson (Tx asset inputs outputs metadata) =
+  let common = assetPairs asset ++
+               [ "inputs" .= inputs
                , "outputs" .= outputs
                , "metadata" .= metadata
-               , "asset" .= asset
                , "version" .= String "1.0"
                ]
-      inputsNoSigs = (\(Input f ob _) -> Input f ob Null) <$> inputs
-      txNoSigs = object (("inputs" .= inputsNoSigs) : common)
-      txid = Txid $ T.pack $ sha3 $ encodeDeterm txNoSigs
+      noSigsTx = removeSigs $ object common
+      txid = Txid $ T.pack $ sha3 $ encodeDeterm noSigsTx
+      tx = object (("id" .= txid) : common)
    in (txid, tx)
+
+
+getTxid :: Transaction -> Txid
+getTxid = fst . txidAndJson
 
 
 encodeDeterm :: ToJSON v => v -> ByteString
@@ -131,79 +146,10 @@ removeSigs val = build "{inputs:[{fulfillment}]}" val nulls
   where
     -- It's neccesary to apply a workaround here; the Data.Aeson.Quick.build
     -- function tries to convert our Nulls array to a Vector, which is strict
-    -- in it's length. For this reason, we just create a really long Array of
-    -- null values. It'll only be allocated once.
+    -- in it's length. For this reason we can't use an unbounded list, which
+    -- would be the natural thing to do, we just create a really long Array of
+    -- null values. It's only allocated once.
     nulls = toJSON $ take 10000 $ repeat Null
-
---------------------------------------------------------------------------------
---
-
-data AnyTransaction = AnyS SignedTransaction
-                    | AnyU UnsignedTransaction
-  deriving (Eq, Show)
-
-
-instance FromJSON AnyTransaction where
-  parseJSON value = do
-    let mFfill = value ^? key "inputs" . nth 0 . key "fulfillment"
-    case mFfill of
-         (Just (String _)) -> AnyS <$> parseJSON value
-         _                 -> AnyU <$> parseJSON value
-
-
-instance Ord AnyTransaction where
-  a >= b = getTxid a >= getTxid b
-
---------------------------------------------------------------------------------
--- Signed transaction
---
--- Represents a signed transaction, having an ID, a JSON representation
--- and having string fulfillments
---
-data SignedTransaction =
-  SignedTx Txid Value (Transaction T.Text)
-  deriving (Eq, Show)
-
-
-instance FromJSON SignedTransaction where
-  parseJSON val = do
-    txid <- (.: "id") =<< parseJSON val
-    tx <- parseTx val
-    let (txid', value) = txidAndJson tx
-    when (txid /= txid') $ fail "Txid mismatch"
-    --parseSignatures tx TODO
-    pure $ SignedTx txid value tx
-
-
-instance ToJSON SignedTransaction where
-  toJSON (SignedTx _ val _) = val
-
-
-getTxid (AnyS (SignedTx txid _ _)) = txid
-getTxid (AnyU (UnsignedTx txid _ _)) = txid
-
---------------------------------------------------------------------------------
--- Unsigned transaction
---
--- Represents an unsigned transaction, having an ID, a JSON representation
--- and having template fulfillments
---
-data UnsignedTransaction =
-  UnsignedTx Txid Value (Transaction ConditionDetails)
-  deriving (Eq, Show)
-
-
-instance FromJSON UnsignedTransaction where
-  parseJSON val = do
-    mtxid <- (.:?"id") =<< parseJSON val
-    tx <- parseTx val
-    let (txid', value) = txidAndJson tx
-    when (fmap (==txid') mtxid == Just False) $ fail "Txid mismatch"
-    pure $ UnsignedTx txid' value tx
-
-
-instance ToJSON UnsignedTransaction where
-  toJSON (UnsignedTx _ val _) = val
 
 
 --------------------------------------------------------------------------------
@@ -228,21 +174,57 @@ emptyObject = NEO Nothing
 type Metadata = NonEmptyObject
 type AssetData = NonEmptyObject
 
+
 --------------------------------------------------------------------------------
 -- Asset
 --
-data Asset = AssetDefinition AssetData | AssetLink Txid
+data Asset = Create AssetData | Transfer Txid
   deriving (Eq, Show)
 
 
 instance ToJSON Asset where
-  toJSON (AssetLink txid) = object ["id" .= txid]
-  toJSON (AssetDefinition obj) = object ["data" .= obj]
+  toJSON (Transfer txid) = object ["id" .= txid]
+  toJSON (Create obj) = object ["data" .= obj]
 
 
 parseAsset :: Operation -> Object -> Parser Asset
-parseAsset Create val = AssetDefinition <$> val .: "data"
-parseAsset Transfer val = AssetLink <$> val .: "id"
+parseAsset CREATE val = Create <$> val .: "data"
+parseAsset TRANSFER val = Transfer <$> val .: "id"
+
+
+assetPairs :: Asset -> [Pair]
+assetPairs a@(Create assetData) = [ "operation" .= String "CREATE", "asset" .= a ]
+assetPairs a@(Transfer assetId) = [ "operation" .= String "TRANSFER", "asset" .= a ]
+
+--------------------------------------------------------------------------------
+-- Inputs
+--
+data Inputs = Signed [Input T.Text] | Unsigned [Input ConditionDetails]
+  deriving (Eq, Show)
+
+
+instance ToJSON Inputs where
+  toJSON (Signed inputs) = toJSON inputs
+  toJSON (Unsigned inputs) = toJSON inputs
+
+
+parseInputs :: Operation -> [Object] -> Parser Inputs
+parseInputs op objs = (Signed <$> safeInputs op objs)
+                  <|> (Unsigned <$> safeInputs op objs)
+
+
+-- | Parse inputs depending on transaction operation
+safeInputs :: FromJSON f => Operation -> [Object] -> Parser [Input f]
+safeInputs _ [] = fail "Transaction must have inputs"
+safeInputs TRANSFER objs = mapM (parseJSON . Object) objs
+safeInputs CREATE [obj] = do
+  fulfillsVal <- obj .: "fulfills"
+  let ffills | fulfillsVal == Null = pure nullOutputLink
+             | otherwise = fail "CREATE tx does not link to an output"
+  input <- Input <$> ffills <*> (obj .: "owners_before")
+                            <*> (obj .: "fulfillment")
+  pure [input]
+safeInputs CREATE _ = fail "CREATE tx has exactly one input"
 
 
 --------------------------------------------------------------------------------
@@ -262,19 +244,6 @@ instance (FromJSON ffill) => FromJSON (Input ffill) where
     Input <$> (obj .: "fulfills")
           <*> (obj .: "owners_before")
           <*> (obj .: "fulfillment")
-
-
--- | Parse inputs depending on transaction operation
-parseInputs :: FromJSON f => Operation -> [Object] -> Parser [Input f]
-parseInputs Transfer objs = mapM (parseJSON .  Object) objs
-parseInputs Create [obj] = do
-  fulfillsVal <- obj .: "fulfills"
-  let ffills | fulfillsVal == Null = pure nullOutputLink
-             | otherwise = fail "CREATE tx does not link to an output"
-  input <- Input <$> ffills <*> (obj .: "owners_before")
-                            <*> (obj .: "fulfillment")
-  pure [input]
-parseInputs Create _ = fail "CREATE tx has exactly one input"
 
 
 type OwnersBefore = [PublicKey]

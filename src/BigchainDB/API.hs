@@ -99,18 +99,15 @@ createTx = params $ \obj -> do
 
 signTx :: JsonMethod
 signTx = params $ \obj -> do
-  anyTx <- obj .: "tx"
+  tx <- obj .: "tx"
   key <- obj .: "key"
-  untx <- case anyTx of
-               TX.AnyS _ -> fail "Tx is already signed"
-               TX.AnyU tx -> pure tx
-  pure $ toJSON <$> TX.signTx key untx
+  pure $ toJSON <$> TX.signTx key tx
 
 
 validateTx :: JsonMethod
 validateTx = params $ \obj -> do
   txVal <- obj .: "tx" :: Parser Value
-  let res = fromJSON txVal :: Result TX.AnyTransaction
+  let res = fromJSON txVal :: Result TX.Transaction
   pure $
     case res of
          Error str -> throwE $ badTx str
