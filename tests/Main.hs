@@ -37,6 +37,15 @@ txTests = testGroup "Test Transaction ID validation"
          tx <- createTx createSpec
          validateTx $ "{tx}" .% tx
        res @?= Right (String "ok")
+
+
+  ,  testCase "tx-no-id-fails" $ do
+       res <- runExceptT $ do
+         tx <- createTx createSpec
+         let txNoId = tx & key "id" .~ Null
+         validateTx $ "{tx}" .% txNoId
+       res @?= Left (BDBError 100 Null "failed to parse field id: expected Text, encountered Null")
+
   ,
      testCase "tx-wrong-id-fails" $ do
        res <- runExceptT $ do

@@ -98,15 +98,12 @@ instance FromJSON Transaction where
              <*> obj .: "metadata"
 
     -- Verify txid
-    mId <- obj .: "id"
     let (Txid calcTxid) = fst (txidAndJson tx)
-    case mId of
-         Just txid ->
-           when (Txid calcTxid /= txid) $
-               fail ("Txid mismatch: " ++ T.unpack calcTxid)
-         Nothing -> pure ()
-    pure tx
+    notEqual <- (/=Txid calcTxid) <$> obj .: "id"
+    when notEqual $ fail ("Txid mismatch: " ++ T.unpack calcTxid)
 
+    -- All done
+    pure tx
 
 
 instance ToJSON Transaction where
