@@ -59,7 +59,6 @@ txTests = testGroup "Test Transaction ID validation"
                          "outputs" .= toJSON [["1","(1 of " <> alice <> ")"]]]
 
 
-
 dslParserTests :: TestTree
 dslParserTests = testGroup "CryptoConditions DSL Parser"
   [

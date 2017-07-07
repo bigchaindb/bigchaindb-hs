@@ -36,14 +36,21 @@ mkTransferTx spends links outputSpecs metadata = do
     throwE $ txTransferError "spends cannot be empty"
 
   when (outputSpecs == []) $
-    throwE $ txTransferError "spends cannot be empty"
+    throwE $ txTransferError "outputs cannot be empty"
 
   let spendsList = Set.toList spends
-      inputs = Unsigned $ Set.toList spends >>= txToInputs
+      allInputs = spendsList >>= txToInputs
+      inputs = Unsigned $ filterSpends links allInputs
 
   outputs <- mapM createOutput outputSpecs
   assetLink <- getAssetLink spendsList
   pure $ Tx assetLink inputs outputs metadata
+
+
+filterSpends :: Set OutputLink -> [Input a] -> [Input a]
+filterSpends links inputs
+  | links == mempty = inputs
+  | otherwise = filter (\(Input ol _ _) -> Set.member ol links) inputs
 
 
 getAssetLink :: [Transaction] -> Except BDBError Asset
