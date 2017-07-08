@@ -40,17 +40,22 @@ mkTransferTx spends links outputSpecs metadata = do
 
   let spendsList = Set.toList spends
       allInputs = spendsList >>= txToInputs
-      inputs = Unsigned $ filterSpends links allInputs
+      selectedInputs = filter (isSelectedInput links . snd) allInputs
+      (inputAmounts, inputs) = unzip selectedInputs
 
   outputs <- mapM createOutput outputSpecs
+
+  when (sum inputAmounts /= sum [n | (Output _ n) <- outputs]) $
+     throwE $ txTransferError "Input amount not equal to output amount"
+
   assetLink <- getAssetLink spendsList
-  pure $ Tx assetLink inputs outputs metadata
+  pure $ Tx assetLink (Unsigned inputs) outputs metadata
 
 
-filterSpends :: Set OutputLink -> [Input a] -> [Input a]
-filterSpends links inputs
-  | links == mempty = inputs
-  | otherwise = filter (\(Input ol _ _) -> Set.member ol links) inputs
+isSelectedInput :: Set OutputLink -> Input a -> Bool
+isSelectedInput links (Input ol _ _)
+  | links == mempty = True
+  | otherwise = Set.member ol links
 
 
 getAssetLink :: [Transaction] -> Except BDBError Asset
@@ -64,11 +69,12 @@ getAssetLink txs =
     getAssetId tx = fst $ txidAndJson tx
 
 
-txToInputs :: Transaction -> [Input ConditionDetails]
+txToInputs :: Transaction -> [(Amount, Input ConditionDetails)]
 txToInputs tx@(Tx {outputs=outputs}) =
-  convertOutput (getTxid tx) <$> zip [0..] outputs
+  [(n, convertOutput (getTxid tx) (idx, cond))
+    | (idx, Output (Condition cond) n) <- zip [0..] outputs]
 
 
-convertOutput :: Txid -> (Int, Output) -> Input ConditionDetails
-convertOutput txid (idx, (Output (Condition cond) _)) =
+convertOutput :: Txid -> (Int, CryptoCondition) -> Input ConditionDetails
+convertOutput txid (idx, cond) =
   Input (OutputLink txid idx) (getConditionPubkeys cond) (Details cond)

@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 --------------------------------------------------------------------------------
 -- Transaction data types and JSON instances
@@ -250,7 +251,7 @@ type OwnersBefore = [PublicKey]
 -- Amount
 --
 newtype Amount = Amount Word
-  deriving (Eq, Show)
+  deriving (Eq, Num, Show)
 
 
 instance ToJSON Amount where
