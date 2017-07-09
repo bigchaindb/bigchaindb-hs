@@ -16,10 +16,6 @@ Flag so
 
 library
   exposed-modules:     BigchainDB.API,
-                       BigchainDB.Transaction,
-                       BigchainDB.Transaction.Types,
-                       BigchainDB.Transaction.Transfer,
-                       BigchainDB.Prelude,
                        BigchainDB.Crypto,
                        BigchainDB.Crypto.B58Keys,
                        BigchainDB.CryptoConditions,
@@ -27,7 +23,13 @@ library
                        BigchainDB.CryptoConditions.DSL.Parse,
                        BigchainDB.CryptoConditions.DSL.Serialize,
                        BigchainDB.CryptoConditions.Types,
-                       BigchainDB.Exceptions
+                       BigchainDB.Data.Aeson,
+                       BigchainDB.Exceptions,
+                       BigchainDB.Prelude,
+                       BigchainDB.Transaction,
+                       BigchainDB.Transaction.Common,
+                       BigchainDB.Transaction.Types,
+                       BigchainDB.Transaction.Transfer
   build-depends:       base,
                        aeson,
                        aeson-quick,
@@ -36,6 +38,7 @@ library
                        base58-bytestring,
                        cryptonite,
                        cryptoconditions,
+                       unordered-containers,
                        microlens,
                        microlens-platform,
                        microlens-aeson,

@@ -11,6 +11,7 @@ module BigchainDB.CryptoConditions
 import Data.Aeson.Types
 import Data.Text as T
 
+import BigchainDB.Data.Aeson
 import BigchainDB.Crypto
 import BigchainDB.CryptoConditions.DSL as DSL
 import BigchainDB.CryptoConditions.Types as BCT
@@ -34,14 +35,14 @@ getConditionDetails (Threshold n subs) =
          ]
 
 
-parseConditionDetails :: Object -> Parser CryptoCondition
-parseConditionDetails obj = do
-  condType <- obj .: "type"
+parseConditionDetails :: Value -> Parser CryptoCondition
+parseConditionDetails = withStrictObject "" $ \obj -> do
+  condType <- obj .:- "type"
   case condType of
        "ed25519-sha-256" -> do
-         (PK pk) <- obj .: "public_key"
+         (PK pk) <- obj .:- "public_key"
          pure $ Ed25519 pk Nothing
        "threshold-sha-256" -> do
-         subconds <- obj .: "subconditions" >>= mapM parseConditionDetails
-         Threshold <$> obj .: "threshold" <*> pure subconds
+         subconds <- obj .:- "subconditions" >>= mapM parseConditionDetails
+         Threshold <$> obj .:- "threshold" <*> pure subconds
        _ -> fail ("Unsupported condition type: " ++ condType)

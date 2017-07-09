@@ -13,9 +13,3 @@ so-alt: build-so
 
 clean:
 	rm -rf build
-
-dist-python: clean so
-	cp build/dist-so/*.so frontends/python/bigchaindb_shared/shared.so
-	cp -r build/dist-so/libs frontends/python/bigchaindb_shared/
-	cp bigchaindb.cabal frontends/python/bigchaindb_shared/
-	cd frontends/python && python setup.py sdist
