@@ -85,10 +85,10 @@ generateKeyPair _ = do
 
 createTx :: JsonMethod
 createTx = getParams $ \obj -> do
-  act <- TX.mkCreateTx <$> obj .:? "asset" .!= TX.emptyObject
+  act <- TX.mkCreateTx <$> obj .:? "asset" .!= TX.nullPayload
                        <*> obj .:  "creator"
                        <*> obj .:  "outputs"
-                       <*> obj .:? "metadata" .!= TX.emptyObject
+                       <*> obj .:? "metadata" .!= TX.nullPayload
   pure $ toJSON <$> act
 
 
@@ -159,5 +159,5 @@ transferTx = getParams $ \obj -> do
   act <- TX.mkTransferTx <$> obj .:  "spends"
                          <*> obj .:? "links" .!= mempty
                          <*> obj .:  "outputs"
-                         <*> obj .:? "metadata" .!= TX.emptyObject
+                         <*> obj .:? "metadata" .!= TX.nullPayload
   pure $ toJSON <$> act

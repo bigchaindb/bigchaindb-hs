@@ -22,16 +22,16 @@ module BigchainDB.Transaction.Types
   , Metadata
   , AssetData
   , getTxid
-  , emptyObject
   , encodeDeterm
   , removeSigs
+  , nullPayload
   , nullOutputLink
   , txidAndJson
   ) where
 
 import Data.Aeson.Quick (build)
 import Data.Aeson.Encode.Pretty
-import Data.Aeson.Types hiding (emptyObject)
+import Data.Aeson.Types
 import Data.ByteString.Lazy (toStrict)
 import Data.Char (isHexDigit)
 import qualified Data.Text as T
@@ -152,14 +152,14 @@ instance ToJSON NonEmptyObject where
   toJSON (NEO o) = toJSON o
 
 instance FromJSON NonEmptyObject where
-  parseJSON Null = pure emptyObject
+  parseJSON Null = pure nullPayload
   parseJSON (Object o) =
     if o == mempty then fail "may not be empty (use null)"
                    else pure $ NEO (Just o)
   parseJSON val = typeMismatch "null or object" val
 
-emptyObject :: NonEmptyObject
-emptyObject = NEO Nothing
+nullPayload :: NonEmptyObject
+nullPayload = NEO Nothing
 
 type Metadata = NonEmptyObject
 type AssetData = NonEmptyObject
