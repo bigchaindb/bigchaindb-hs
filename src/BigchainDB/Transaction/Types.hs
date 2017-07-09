@@ -15,7 +15,7 @@ module BigchainDB.Transaction.Types
   , ConditionDetails(..)
   , Input(..)
   , Inputs(..)
-  , Operation(..)
+  , Operation
   , Output(..)
   , OutputLink(..)
   , OutputSpec
@@ -64,19 +64,6 @@ instance FromJSON Txid where
     case (T.all isHexDigit txt, T.length txt) of
       (True, 64) -> pure $ Txid txt
       _          -> fail "Malformed ID"
-
-
---------------------------------------------------------------------------------
--- Operation
---
-data Operation = CREATE | TRANSFER
-  deriving (Show, Ord, Eq)
-
-
-instance FromJSON Operation where
-  parseJSON (String "CREATE") = pure CREATE
-  parseJSON (String "TRANSFER") = pure TRANSFER
-  parseJSON op = fail $ "Invalid operation: " ++ show op
 
 
 --------------------------------------------------------------------------------
@@ -155,6 +142,8 @@ removeSigs val = build "{inputs:[{fulfillment}]}" val nulls
     nulls = toJSON $ take 10000 $ repeat Null
 
 
+type Operation = T.Text
+
 --------------------------------------------------------------------------------
 -- NonEmptyObject
 --
@@ -192,8 +181,8 @@ instance ToJSON Asset where
 
 parseAsset :: Operation -> Value -> Parser Asset
 parseAsset op = withStrictObject "asset" $ \obj ->
-  case op of CREATE -> Create <$> obj .:- "data"
-             TRANSFER -> Transfer <$> obj .:- "id"
+  case op of "CREATE" -> Create <$> obj .:- "data"
+             "TRANSFER" -> Transfer <$> obj .:- "id"
 
 
 assetPairs :: Asset -> [Pair]
@@ -202,6 +191,8 @@ assetPairs a@(Transfer assetId) = [ "operation" .= String "TRANSFER", "asset" .=
 
 --------------------------------------------------------------------------------
 -- Inputs
+--
+-- Represent either signed or unsigned inputs
 --
 data Inputs = Signed [Input T.Text] | Unsigned [Input ConditionDetails]
   deriving (Eq, Show)
@@ -220,15 +211,15 @@ parseInputs op objs = (Signed <$> safeInputs op objs)
 -- | Parse inputs depending on transaction operation
 safeInputs :: FromJSON f => Operation -> [Value] -> Parser [Input f]
 safeInputs _ [] = fail "Transaction must have inputs"
-safeInputs TRANSFER val = mapM parseJSON val
-safeInputs CREATE [val] = flip (withStrictObject "input") val $ \obj -> do
+safeInputs "TRANSFER" val = mapM parseJSON val
+safeInputs "CREATE" [val] = flip (withStrictObject "input") val $ \obj -> do
   fulfillsVal <- obj .:- "fulfills"
   let ffills | fulfillsVal == Null = pure nullOutputLink
              | otherwise = fail "CREATE tx does not link to an output"
   input <- Input <$> ffills <*> (obj .:- "owners_before")
                             <*> (obj .:- "fulfillment")
   pure [input]
-safeInputs CREATE _ = fail "CREATE tx has exactly one input"
+safeInputs "CREATE" _ = fail "CREATE tx has exactly one input"
 
 
 --------------------------------------------------------------------------------
