@@ -1,31 +1,28 @@
 module BigchainDB.Prelude
-  ( module CA
-  , module CM
-  , module DM
-  , module TC
-  , module TE
-  , module ALL
+  ( module ALL
   , exceptToFail
   ) where
 
-import Data.Aeson
-import Data.Aeson.Types
-
-import Control.Monad as CM (join, when)
-import Control.Applicative as CA
-import Control.Monad.Trans.Except as TE
-import Control.Monad.Trans.Class as TC
+import Control.Monad as ALL (join, when)
+import Control.Applicative as ALL
+import Control.Monad.Trans.Except as ALL
+import Control.Monad.Trans.Class as ALL
 
 import Data.ByteString as ALL (ByteString)
 import Data.Functor.Identity
 import Data.Maybe as ALL (fromJust)
-import Data.Monoid as DM
+import Data.Monoid as ALL
 import Data.Set as ALL (Set)
 
 import BigchainDB.Exceptions as ALL
+import BigchainDB.Data.Utils as ALL
+import BigchainDB.Data.Aeson as ALL
 
+
+-- Calls fail on exception
 exceptToFail :: Monad m => Except String a -> m a
 exceptToFail = either fail return . runIdentity . runExceptT
+
 
 
 

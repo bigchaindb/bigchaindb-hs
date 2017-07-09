@@ -8,20 +8,9 @@ module BigchainDB.Transaction.Transfer
   ( mkTransferTx
   ) where
 
-import Data.Aeson.Quick hiding (emptyObject)
-import Data.Aeson.Encode.Pretty
-import Data.Aeson.Types hiding (emptyObject)
-import Data.ByteString.Lazy (toStrict)
-import Data.Char (isHexDigit)
 import Data.List (nub)
 import qualified Data.Set as Set
-import qualified Data.Text as T
-import Data.Text.Read
 
-import Lens.Micro
-import Lens.Micro.Aeson
-
-import BigchainDB.Crypto
 import BigchainDB.CryptoConditions
 import BigchainDB.Prelude
 import BigchainDB.Transaction.Common
@@ -49,11 +38,11 @@ mkTransferTx spends links outputSpecs metadata = do
      throwE $ txTransferError "Input amount not equal to output amount"
 
   assetLink <- getAssetLink spendsList
-  pure $ Tx assetLink (Unsigned inputs) outputs metadata
+  pure $ Tx assetLink inputs outputs metadata
 
 
-isSelectedInput :: Set OutputLink -> Input a -> Bool
-isSelectedInput links (Input ol _ _)
+isSelectedInput :: Set OutputLink -> Input -> Bool
+isSelectedInput links (Input ol _)
   | links == mempty = True
   | otherwise = Set.member ol links
 
@@ -65,16 +54,16 @@ getAssetLink txs =
        [assetId] -> pure (Transfer assetId)
        _ -> throwE $ txTransferError "Cannot consolidate transactions with different asset IDs"
   where
-    getAssetId (Tx {asset=Transfer assetId}) = assetId
+    getAssetId (Tx {_asset=Transfer assetId}) = assetId
     getAssetId tx = fst $ txidAndJson tx
 
 
-txToInputs :: Transaction -> [(Amount, Input ConditionDetails)]
-txToInputs tx@(Tx {outputs=outputs}) =
+txToInputs :: Transaction -> [(Amount, Input)]
+txToInputs tx@(Tx {_outputs=outputs}) =
   [(n, convertOutput (getTxid tx) (idx, cond))
     | (idx, Output (Condition cond) n) <- zip [0..] outputs]
 
 
-convertOutput :: Txid -> (Int, CryptoCondition) -> Input ConditionDetails
+convertOutput :: Txid -> (Int, CryptoCondition) -> Input
 convertOutput txid (idx, cond) =
-  Input (OutputLink txid idx) (getConditionPubkeys cond) (Details cond)
+  Input (OutputLink txid idx) cond

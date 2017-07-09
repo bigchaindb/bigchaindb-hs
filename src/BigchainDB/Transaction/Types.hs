@@ -12,9 +12,7 @@ module BigchainDB.Transaction.Types
   ( Amount
   , Asset(..)
   , Condition(..)
-  , ConditionDetails(..)
   , Input(..)
-  , Inputs(..)
   , Operation
   , Output(..)
   , OutputLink(..)
@@ -31,7 +29,7 @@ module BigchainDB.Transaction.Types
   , txidAndJson
   ) where
 
-import Data.Aeson.Quick hiding (emptyObject)
+import Data.Aeson.Quick (build)
 import Data.Aeson.Encode.Pretty
 import Data.Aeson.Types hiding (emptyObject)
 import Data.ByteString.Lazy (toStrict)
@@ -39,13 +37,9 @@ import Data.Char (isHexDigit)
 import qualified Data.Text as T
 import Data.Text.Read
 
-import Lens.Micro
-import Lens.Micro.Aeson
-
 import BigchainDB.Crypto
 import BigchainDB.CryptoConditions
 import BigchainDB.Prelude
-import BigchainDB.Data.Aeson
 
 --------------------------------------------------------------------------------
 -- Transaction ID
@@ -70,15 +64,17 @@ instance FromJSON Txid where
 -- Transaction
 --
 data Transaction = Tx
-  { asset :: Asset
-  , inputs :: Inputs
-  , outputs :: [Output]
-  , metadata :: Metadata
+  { _asset :: Asset
+  , _inputs :: [Input]
+  , _outputs :: [Output]
+  , _metadata :: Metadata
   } deriving (Eq, Show)
 
 
 instance FromJSON Transaction where
   parseJSON = withStrictObject "transaction" $ \obj -> do
+
+    -- Construct tx
     op <- obj .:- "operation"
     tx <- Tx <$> (obj .:- "asset" >>= parseAsset op)
              <*> (obj .:- "inputs" >>= parseInputs op)
@@ -160,7 +156,9 @@ instance FromJSON NonEmptyObject where
   parseJSON (Object o) =
     if o == mempty then fail "may not be empty (use null)"
                    else pure $ NEO (Just o)
+  parseJSON val = typeMismatch "null or object" val
 
+emptyObject :: NonEmptyObject
 emptyObject = NEO Nothing
 
 type Metadata = NonEmptyObject
@@ -183,65 +181,63 @@ parseAsset :: Operation -> Value -> Parser Asset
 parseAsset op = withStrictObject "asset" $ \obj ->
   case op of "CREATE" -> Create <$> obj .:- "data"
              "TRANSFER" -> Transfer <$> obj .:- "id"
+             _        -> invalidOperation
 
 
 assetPairs :: Asset -> [Pair]
-assetPairs a@(Create assetData) = [ "operation" .= String "CREATE", "asset" .= a ]
-assetPairs a@(Transfer assetId) = [ "operation" .= String "TRANSFER", "asset" .= a ]
-
---------------------------------------------------------------------------------
--- Inputs
---
--- Represent either signed or unsigned inputs
---
-data Inputs = Signed [Input T.Text] | Unsigned [Input ConditionDetails]
-  deriving (Eq, Show)
+assetPairs a@(Create _) = [ "operation" .= String "CREATE", "asset" .= a ]
+assetPairs a@(Transfer _) = [ "operation" .= String "TRANSFER", "asset" .= a ]
 
 
-instance ToJSON Inputs where
-  toJSON (Signed inputs) = toJSON inputs
-  toJSON (Unsigned inputs) = toJSON inputs
-
-
-parseInputs :: Operation -> [Value] -> Parser Inputs
-parseInputs op objs = (Signed <$> safeInputs op objs)
-                  <|> (Unsigned <$> safeInputs op objs)
-
-
--- | Parse inputs depending on transaction operation
-safeInputs :: FromJSON f => Operation -> [Value] -> Parser [Input f]
-safeInputs _ [] = fail "Transaction must have inputs"
-safeInputs "TRANSFER" val = mapM parseJSON val
-safeInputs "CREATE" [val] = flip (withStrictObject "input") val $ \obj -> do
-  fulfillsVal <- obj .:- "fulfills"
-  let ffills | fulfillsVal == Null = pure nullOutputLink
-             | otherwise = fail "CREATE tx does not link to an output"
-  input <- Input <$> ffills <*> (obj .:- "owners_before")
-                            <*> (obj .:- "fulfillment")
-  pure [input]
-safeInputs "CREATE" _ = fail "CREATE tx has exactly one input"
+invalidOperation :: Parser a
+invalidOperation = fail "Invalid operation, expected CREATE or TRANSFER"
 
 
 --------------------------------------------------------------------------------
 -- Input with polymorphic fulfillment type (signed or unsigned)
 --
-data Input ffill = Input OutputLink OwnersBefore ffill
+data Input = Input OutputLink CryptoCondition
   deriving (Eq, Show)
 
 
-instance (ToJSON ffill) => ToJSON (Input ffill) where
-  toJSON (Input f ob ff) =
-    object ["fulfills" .= f, "fulfillment" .= ff, "owners_before" .= ob]
+instance ToJSON Input where
+  toJSON (Input link cond) =
+    let ff = maybe (getConditionDetails cond) toJSON $ getFulfillmentBase64 cond
+    in object [ "fulfills" .= link
+              , "fulfillment" .= ff
+              , "owners_before" .= getConditionPubkeys cond
+              ]
 
 
-instance (FromJSON ffill) => FromJSON (Input ffill) where
-  parseJSON = withStrictObject "input" $ \obj ->
-    Input <$> (obj .:- "fulfills")
-          <*> (obj .:- "owners_before")
-          <*> (obj .:- "fulfillment")
+-- | Parse inputs depending on transaction operation
+parseInputs :: Operation -> [Value] -> Parser [Input]
+parseInputs _ [] = fail "Transaction must have inputs"
+parseInputs "TRANSFER" val = mapM parseTransferInput val
+parseInputs "CREATE" [val] = (:[]) <$> parseCreateInput val
+parseInputs "CREATE" _ = fail "CREATE tx has exactly one input"
+parseInputs _ _ = invalidOperation
 
 
-type OwnersBefore = [PublicKey]
+parseInput :: StrictObject -> OutputLink -> Parser Input
+parseInput obj link = do
+  -- TODO: Verify this
+  _ <- obj .:- "owners_before" :: Parser (Set (T.Text))
+  let fulfillment = obj .:- "fulfillment" >>= parsePolyFulfillment
+  Input link <$> fulfillment
+
+
+parseTransferInput :: Value -> Parser Input
+parseTransferInput = withStrictObject "input" $ \obj ->
+    obj .:- "fulfills" >>= parseInput obj
+
+
+parseCreateInput :: Value -> Parser Input
+parseCreateInput = withStrictObject "input" $ \obj -> do
+    fulfillsVal <- obj .:- "fulfills"
+    fulfills <- if fulfillsVal == Null
+                  then pure nullOutputLink
+                  else fail "CREATE tx does not link to an output"
+    parseInput obj fulfills
 
 
 --------------------------------------------------------------------------------
@@ -297,33 +293,18 @@ newtype Condition = Condition CryptoCondition
 
 instance ToJSON Condition where
   toJSON (Condition c) =
-    object [ "details" .= Details c
+    object [ "details" .= getConditionDetails c
            , "uri" .= getConditionURI c
            ]
 
 instance FromJSON Condition where
   parseJSON = withStrictObject "condition" $ \obj -> do
-    Details cc <- obj .:- "details"
+    cc <- obj .:- "details" >>= parseConditionDetails
     actualUri <- obj .:- "uri" :: Parser T.Text
     let expectedUri = getConditionURI cc
     when (expectedUri /= actualUri) $
       fail $ "Expected URI: " ++ show expectedUri
     pure $ Condition cc
-
-
---------------------------------------------------------------------------------
--- Condition Details
---
-newtype ConditionDetails = Details CryptoCondition
-  deriving (Eq, Show)
-
-
-instance ToJSON ConditionDetails where
-  toJSON (Details c) = getConditionDetails c
-
-
-instance FromJSON ConditionDetails where
-  parseJSON val = Details <$> parseConditionDetails val
 
 
 --------------------------------------------------------------------------------

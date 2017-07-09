@@ -12,11 +12,6 @@ import qualified Crypto.PubKey.Ed25519 as Ed2
 import Data.Aeson
 
 import qualified Data.ByteString.Char8 as C8
-import Data.ByteString.Lazy (toStrict)
-import qualified Data.Text as T
-
-import Lens.Micro
-import Lens.Micro.Aeson
 
 import BigchainDB.Crypto
 import BigchainDB.CryptoConditions
@@ -26,15 +21,14 @@ import BigchainDB.Prelude
 import BigchainDB.Transaction.Common as TTE
 import BigchainDB.Transaction.Transfer as TTE
 import BigchainDB.Transaction.Types as TTE
-  hiding (SignedTransaction(..), UnsignedTransaction(..))
 
 
 mkCreateTx :: AssetData -> PublicKey -> [OutputSpec]
            -> Metadata -> Except BDBError Transaction
 mkCreateTx _ _ [] _ = throwE $ txCreateError "Outputs cannot be empty"
 mkCreateTx assetData (PK creator) outputSpecs metadata = do
-    let ffill = Details $ ed25519Condition creator
-        inputs = Unsigned [Input nullOutputLink [PK creator] ffill]
+    let ffill = ed25519Condition creator
+        inputs = [Input nullOutputLink ffill]
     outputs <- mapM createOutput outputSpecs
     pure $ Tx (Create assetData) inputs outputs metadata
 
@@ -46,18 +40,17 @@ signCondition msg cond (SK sk) =
   in fulfillEd25519 pk sig cond
 
 
-signInput :: SecretKey -> ByteString -> Input ConditionDetails
-          -> Except BDBError (Input T.Text)
-signInput sk msg (Input l ob (Details cond)) =
-  let fcond = signCondition msg cond sk
-      mff = getFulfillmentBase64 fcond
-   in maybe (throwE missingPrivateKeys) (return . Input l ob) mff
+signInput :: SecretKey -> ByteString -> Input -> Except BDBError Input
+signInput sk msg (Input l cond) =
+  let ffill = signCondition msg cond sk
+  in if conditionIsSigned ffill
+        then pure $ Input l ffill
+        else throwE missingPrivateKeys
 
 
 signTx :: SecretKey -> Transaction -> Except BDBError Transaction
-signTx sk (Tx _ (Signed _) _ _) = throwE txAlreadySigned
-signTx sk tx@(Tx asset (Unsigned inputs) outputs metadata) = do 
+signTx sk tx@(Tx asset inputs outputs metadata) = do 
   let msg = encodeDeterm $ removeSigs $ toJSON tx
-  signedInputs <- Signed <$> mapM (signInput sk msg) inputs
+  signedInputs <- mapM (signInput sk msg) inputs
       -- TODO: test encode signedTx == signedVal
   pure $ Tx asset signedInputs outputs metadata

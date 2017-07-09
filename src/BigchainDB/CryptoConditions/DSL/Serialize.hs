@@ -8,12 +8,8 @@ module BigchainDB.CryptoConditions.DSL.Serialize
 import Control.Monad.Trans.State
 
 import qualified Data.Attoparsec.Text as AT
-import Data.Char (chr)
-import qualified Data.IntMap.Strict as IntMap
 import qualified Data.Text as T
 import qualified Data.List as List
-
-import Numeric
 
 import BigchainDB.Crypto
 import BigchainDB.CryptoConditions.DSL.Parse
@@ -33,6 +29,7 @@ serialize (Threshold t subs) = do
 serialize (Ed25519 pk _) = do
   local <- state $ localName (PK pk)
   return $ "%" <> T.pack (show local)
+serialize _ = fail "unable to serialize"
 
 
 localName :: PublicKey -> [PublicKey] -> (Int, [PublicKey])

@@ -3,18 +3,21 @@
 module BigchainDB.CryptoConditions
   ( module DSL
   , module BCT
+  , conditionIsSigned
   , getConditionPubkeys
   , getConditionDetails
   , parseConditionDetails
+  , parsePolyFulfillment
   ) where
 
 import Data.Aeson.Types
-import Data.Text as T
+import Data.Text.Encoding (encodeUtf8)
 
 import BigchainDB.Data.Aeson
 import BigchainDB.Crypto
 import BigchainDB.CryptoConditions.DSL as DSL
 import BigchainDB.CryptoConditions.Types as BCT
+
 
 
 getConditionPubkeys :: CryptoCondition -> [PublicKey]
@@ -33,10 +36,11 @@ getConditionDetails (Threshold n subs) =
          , "threshold" .= n
          , "subconditions" .= (getConditionDetails <$> subs)
          ]
+getConditionDetails _ = undefined
 
 
 parseConditionDetails :: Value -> Parser CryptoCondition
-parseConditionDetails = withStrictObject "" $ \obj -> do
+parseConditionDetails = withStrictObject "a" $ \obj -> do
   condType <- obj .:- "type"
   case condType of
        "ed25519-sha-256" -> do
@@ -46,3 +50,18 @@ parseConditionDetails = withStrictObject "" $ \obj -> do
          subconds <- obj .:- "subconditions" >>= mapM parseConditionDetails
          Threshold <$> obj .:- "threshold" <*> pure subconds
        _ -> fail ("Unsupported condition type: " ++ condType)
+
+
+parsePolyFulfillment :: Value -> Parser CryptoCondition
+parsePolyFulfillment val =
+  case val of (Object _) -> parseConditionDetails val
+              (String t) -> let econd = readFulfillmentBase64 (encodeUtf8 t)
+                            in either fail pure econd
+              _          -> typeMismatch "object or string" val
+
+
+conditionIsSigned :: CryptoCondition -> Bool
+conditionIsSigned (Threshold _ cs) = all conditionIsSigned cs
+conditionIsSigned (Ed25519 _ (Just _)) = True
+conditionIsSigned _ = False
+

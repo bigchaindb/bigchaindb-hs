@@ -2,14 +2,11 @@
 
 module Main where
 
-import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy.Char8 as C8L
 
 import Data.Aeson
-import Data.Aeson.Types hiding (Parser)
 import Data.Aeson.Encode.Pretty
 import qualified Data.Map as Map
-import Data.Maybe
 
 import Options.Applicative
 
@@ -17,7 +14,6 @@ import qualified BigchainDB.API as API
 import BigchainDB.Prelude
 
 import System.Exit
-import System.IO
 
 
 type Method = ExceptT BDBError IO Value
@@ -33,7 +29,6 @@ parseCmd = subparser $
 
 jsonArg :: ReadM Value
 jsonArg = eitherReader $ eitherDecode . C8L.pack
-
 
 
 parseOpts :: ParserInfo (Bool, Method)

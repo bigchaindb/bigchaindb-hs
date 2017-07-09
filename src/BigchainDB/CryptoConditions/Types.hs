@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-incomplete-patterns #-}
 
 module BigchainDB.CryptoConditions.Types (
     module IE
@@ -10,13 +11,12 @@ module BigchainDB.CryptoConditions.Types (
 
 import qualified Crypto.PubKey.Ed25519 as Ed2
 
-import Data.Aeson
 import qualified Data.Set as Set
 import Data.Word
 
 import Network.CryptoConditions.Impl
 import qualified Network.CryptoConditions.Impl as IE
-  (getConditionURI, getFulfillmentBase64)
+  (getConditionURI, getFulfillmentBase64, readFulfillmentBase64)
 
 import BigchainDB.Prelude
 

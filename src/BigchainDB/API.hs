@@ -4,20 +4,15 @@ module BigchainDB.API where
 
 import Data.Aeson
 import Data.Aeson.Types (Parser, parseEither)
-import qualified Data.ByteString as BS
 import qualified Data.Map as Map
-import Data.Text (Text)
 import Data.Text.Encoding
 
 import BigchainDB.Crypto
 import BigchainDB.CryptoConditions
 import BigchainDB.Prelude
-import BigchainDB.Exceptions
 import qualified BigchainDB.Transaction as TX
 
 import Lens.Micro
-
-import System.IO.Unsafe
 
 type JsonMethod = Value -> ExceptT BDBError IO Value
 
@@ -54,7 +49,7 @@ runMethod name params = do
                        Map.lookup name methods
   method params
   where
-    methodNotFound name = BDBError (-32601) (toJSON name) "Method not found"
+    methodNotFound m = BDBError (-32601) (toJSON m) "Method not found"
 
 
 wrapJson :: Either BDBError Value -> Value
@@ -73,8 +68,8 @@ ok :: Value
 ok = String "ok"
 
 
-params :: (Object -> Parser (Except BDBError Value)) -> Value -> ExceptT BDBError IO Value
-params parse val = do
+getParams :: (Object -> Parser (Except BDBError Value)) -> Value -> ExceptT BDBError IO Value
+getParams parse val = do
   let res = parseEither (withObject "object" parse) val
   act <- either (throwE . invalidParams) pure res
   either throwE pure $ runExcept act
@@ -89,7 +84,7 @@ generateKeyPair _ = do
 
 
 createTx :: JsonMethod
-createTx = params $ \obj -> do
+createTx = getParams $ \obj -> do
   act <- TX.mkCreateTx <$> obj .:? "asset" .!= TX.emptyObject
                        <*> obj .:  "creator"
                        <*> obj .:  "outputs"
@@ -98,14 +93,14 @@ createTx = params $ \obj -> do
 
 
 signTx :: JsonMethod
-signTx = params $ \obj -> do
+signTx = getParams $ \obj -> do
   tx <- obj .: "tx"
   key <- obj .: "key"
   pure $ toJSON <$> TX.signTx key tx
 
 
 validateTx :: JsonMethod
-validateTx = params $ \obj -> do
+validateTx = getParams $ \obj -> do
   txVal <- obj .: "tx" :: Parser Value
   let res = fromJSON txVal :: Result TX.Transaction
   pure $
@@ -115,19 +110,19 @@ validateTx = params $ \obj -> do
 
 
 validateCondition :: JsonMethod
-validateCondition = params $ \obj -> do
+validateCondition = getParams $ \obj -> do
   _ <- parseJSON (Object obj) :: Parser TX.Condition
   pure $ pure ok
 
 
 parseConditionDSL :: JsonMethod
-parseConditionDSL = params $ \obj -> do
+parseConditionDSL = getParams $ \obj -> do
   expr <- obj .: "expr"
   pure $ toJSON . TX.Condition <$> parseDSL expr
 
 
 signCondition :: JsonMethod
-signCondition = params $ \obj -> do
+signCondition = getParams $ \obj -> do
   (TX.Condition cond) <- obj .: "condition"
   keys <- obj .: "keys" :: Parser [SecretKey]
   msg <- encodeUtf8 <$> obj .: "msg"
@@ -137,7 +132,7 @@ signCondition = params $ \obj -> do
 
 
 verifyFulfillment :: JsonMethod
-verifyFulfillment = params $ \obj -> do
+verifyFulfillment = getParams $ \obj -> do
   (TX.Condition target) <- obj .: "condition"
   ff <- encodeUtf8 <$> obj .: "fulfillment"
   msg <- encodeUtf8 <$> obj .: "msg"
@@ -148,7 +143,7 @@ verifyFulfillment = params $ \obj -> do
 
 
 readFulfillment :: JsonMethod
-readFulfillment = params $ \obj -> do
+readFulfillment = getParams $ \obj -> do
   ff <- encodeUtf8 <$> obj .: "fulfillment"
   --msg <- encodeUtf8 <$> obj .:? "message"
   pure $ do
@@ -160,7 +155,7 @@ readFulfillment = params $ \obj -> do
 
 
 transferTx :: JsonMethod
-transferTx = params $ \obj -> do
+transferTx = getParams $ \obj -> do
   act <- TX.mkTransferTx <$> obj .:  "spends"
                          <*> obj .:? "links" .!= mempty
                          <*> obj .:  "outputs"
