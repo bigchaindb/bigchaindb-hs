@@ -66,7 +66,7 @@ ok = String "ok"
 getParams :: (Object -> Parser (Except Err Value)) -> Value -> ExceptT Err IO Value
 getParams parse val = do
   let res = parseEither (withObject "object" parse) val
-  act <- either (throwE . errStr InvalidMethod) pure res
+  act <- either (throwE . errStr InvalidParams) pure res
   either throwE pure $ runExcept act
 
 

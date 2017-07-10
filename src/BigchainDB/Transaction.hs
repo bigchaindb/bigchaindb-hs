@@ -25,7 +25,7 @@ import BigchainDB.Transaction.Types as TTE
 
 mkCreateTx :: AssetData -> PublicKey -> [OutputSpec]
            -> Metadata -> Except Err Transaction
-mkCreateTx _ _ [] _ = throwE $ errMsg TxCreateError "Outputs cannot be empty"
+mkCreateTx _ _ [] _ = throwE $ errMsg InvalidParams "Outputs cannot be empty"
 mkCreateTx assetData (PK creator) outputSpecs metadata = do
     let ffill = ed25519Condition creator
         inputs = [Input nullOutputLink ffill]

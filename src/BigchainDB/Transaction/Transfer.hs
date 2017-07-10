@@ -22,10 +22,10 @@ mkTransferTx :: Set Transaction -> Set OutputLink -> [OutputSpec] ->
 mkTransferTx spends links outputSpecs metadata = do
 
   when (spends == Set.empty) $
-    throwE $ errMsg TxTransferError "spends cannot be empty"
+    throwE $ errMsg InvalidParams "spends cannot be empty"
 
   when (outputSpecs == []) $
-    throwE $ errMsg TxTransferError "outputs cannot be empty"
+    throwE $ errMsg InvalidParams "outputs cannot be empty"
 
   let spendsList = Set.toList spends
       allInputs = spendsList >>= txToInputs
@@ -35,7 +35,7 @@ mkTransferTx spends links outputSpecs metadata = do
   outputs <- mapM createOutput outputSpecs
 
   when (sum inputAmounts /= sum [n | (Output _ n) <- outputs]) $
-     throwE $ errMsg TxTransferError "Input amount not equal to output amount"
+     throwE $ errMsg InvalidParams "Input amount not equal to output amount"
 
   assetLink <- getAssetLink spendsList
   pure $ Tx assetLink inputs outputs metadata
@@ -52,7 +52,7 @@ getAssetLink txs =
   let assetIds = getAssetId <$> txs
   in case nub assetIds of
        [assetId] -> pure (Transfer assetId)
-       _ -> throwE $ errMsg TxTransferError "Cannot consolidate transactions with different asset IDs"
+       _ -> throwE $ errMsg InvalidParams "Cannot consolidate transactions with different asset IDs"
   where
     getAssetId (Tx {_asset=Transfer assetId}) = assetId
     getAssetId tx = fst $ txidAndJson tx

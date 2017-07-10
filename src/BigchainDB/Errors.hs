@@ -27,10 +27,9 @@ data ErrClass =
     InvalidMethod
   | InvalidProtocol
   | InvalidJson
+  | InvalidParams
   | TxInvalid
   | TxInvalidFulfillment
-  | TxCreateError
-  | TxTransferError
   | TxConditionParseError
   | TxSignMissingPrivateKeys
   | TxWrongId
