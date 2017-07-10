@@ -4,6 +4,7 @@
 module BigchainDB.Errors
   ( Err
   , ErrClass(..)
+  , allErrorClasses
   , errMsg
   , errStr
   ) where
@@ -24,9 +25,9 @@ instance ToJSON Err where
 
 
 data ErrClass =
-    InvalidMethod
+    InvalidJson
+  | InvalidMethod
   | InvalidProtocol
-  | InvalidJson
   | InvalidParams
   | TxInvalid
   | TxInvalidFulfillment
@@ -37,6 +38,10 @@ data ErrClass =
 
 instance ToJSON ErrClass where
   toEncoding = genericToEncoding defaultOptions
+
+
+allErrorClasses :: [ErrClass]
+allErrorClasses = [InvalidJson ..]
 
 
 errMsg :: ErrClass -> Text -> Err

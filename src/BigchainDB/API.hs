@@ -30,7 +30,7 @@ methods = Map.fromList
   , ("signCondition", (signCondition, "Sign a condition"))
   , ("readFulfillment", (readFulfillment, "Get condition from fulfillment"))
   , ("verifyFulfillment", (verifyFulfillment, "Verify a fulfillment payload"))
-  , ("showErrors", (showErrors, "Show all error codes"))
+  , ("showErrorClasses", (showErrorClasses, "Show all error classes"))
   ]
 
 
@@ -161,5 +161,5 @@ transferTx = getParams $ \obj -> do
   pure $ toJSON <$> act
 
 
-showErrors :: JsonMethod
-showErrors _ = return $ object ["errors" .= [InvalidMethod ..]]
+showErrorClasses :: JsonMethod
+showErrorClasses _ = return $ object ["errors" .= allErrorClasses]
