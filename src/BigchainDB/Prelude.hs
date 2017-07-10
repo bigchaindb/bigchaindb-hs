@@ -14,7 +14,7 @@ import Data.Maybe as ALL (fromJust)
 import Data.Monoid as ALL
 import Data.Set as ALL (Set)
 
-import BigchainDB.Exceptions as ALL
+import BigchainDB.Errors as ALL
 import BigchainDB.Data.Utils as ALL
 import BigchainDB.Data.Aeson as ALL
 

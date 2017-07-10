@@ -44,14 +44,14 @@ txTests = testGroup "Test Transaction ID validation"
          tx <- createTx createSpec
          let txNoId = tx & key "id" .~ Null
          validateTx $ "{tx}" .% txNoId
-       res @?= Left (BDBError 100 Null "failed to parse field id: expected Text, encountered Null")
+       res @?= Left (errMsg TxInvalid "failed to parse field id: expected Text, encountered Null")
 
   ,
      testCase "tx-wrong-id-fails" $ do
        res <- runExceptT $ do
          tx <- createTx createSpec
          validateTx $ "{tx}" .% (build "{id}" tx badId)
-       res @?= Left (BDBError 100 Null "Txid mismatch: 947a359928ac0962e96ed70a45a2bad588d4218c11a79f0315522f93943de238")
+       res @?= Left (errMsg TxWrongId "expected txid: 947a359928ac0962e96ed70a45a2bad588d4218c11a79f0315522f93943de238")
   ]
   where
     badId = "FFFd1a44abcf0a18b7aec2d406c11ed0cb0bd371847145be7822c76077ca5514" :: Text
@@ -67,7 +67,7 @@ dslParserTests = testGroup "CryptoConditions DSL Parser"
 
   , testCase "ed25519-fail-b58" $
       runExcept (parseDSL "0uQSF92GR1ZVmL7wNs3MJcg5Py2sDbpwCBmWNrYVSQs1")
-      @?= Left (conditionDslParseError "Failed reading: Expected \"({num} of ...\" or ed25519 key at char 0")
+      @?= Left (errMsg TxConditionParseError "Failed reading: Expected \"({num} of ...\" or ed25519 key at char 0")
 
   , testCase "threshold-simple" $
       runExcept (parseDSL ("(2 of " <> alice <> ", " <> bob <> " * 2)"))
@@ -75,14 +75,14 @@ dslParserTests = testGroup "CryptoConditions DSL Parser"
 
   , testCase "threshold-empty" $
       runExcept (parseDSL "(1 of )") @?=
-        Left (conditionDslParseError "Failed reading: Expected \"({num} of ...\" or ed25519 key at char 6")
+        Left (errMsg TxConditionParseError "Failed reading: Expected \"({num} of ...\" or ed25519 key at char 6")
 
   , testCase "threshold low" $
       runExcept (parseDSL $ "(0 of " <> alice <> ")")
-      @?= Left (conditionDslParseError "Failed reading: Illegal threshold: 0 at char 6")
+      @?= Left (errMsg TxConditionParseError "Failed reading: Illegal threshold: 0 at char 6")
   , testCase "threshold high" $
       runExcept (parseDSL $ "(3 of " <> alice <> "," <> bob <> ")")
-      @?= Left (conditionDslParseError "Failed reading: Impossible threshold at char 96")
+      @?= Left (errMsg TxConditionParseError "Failed reading: Impossible threshold at char 96")
       
   ]
 

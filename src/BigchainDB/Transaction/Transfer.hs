@@ -18,14 +18,14 @@ import BigchainDB.Transaction.Types
 
 
 mkTransferTx :: Set Transaction -> Set OutputLink -> [OutputSpec] ->
-                Metadata -> Except BDBError Transaction
+                Metadata -> Except Err Transaction
 mkTransferTx spends links outputSpecs metadata = do
 
   when (spends == Set.empty) $
-    throwE $ txTransferError "spends cannot be empty"
+    throwE $ errMsg TxTransferError "spends cannot be empty"
 
   when (outputSpecs == []) $
-    throwE $ txTransferError "outputs cannot be empty"
+    throwE $ errMsg TxTransferError "outputs cannot be empty"
 
   let spendsList = Set.toList spends
       allInputs = spendsList >>= txToInputs
@@ -35,7 +35,7 @@ mkTransferTx spends links outputSpecs metadata = do
   outputs <- mapM createOutput outputSpecs
 
   when (sum inputAmounts /= sum [n | (Output _ n) <- outputs]) $
-     throwE $ txTransferError "Input amount not equal to output amount"
+     throwE $ errMsg TxTransferError "Input amount not equal to output amount"
 
   assetLink <- getAssetLink spendsList
   pure $ Tx assetLink inputs outputs metadata
@@ -47,12 +47,12 @@ isSelectedInput links (Input ol _)
   | otherwise = Set.member ol links
 
 
-getAssetLink :: [Transaction] -> Except BDBError Asset
+getAssetLink :: [Transaction] -> Except Err Asset
 getAssetLink txs =
   let assetIds = getAssetId <$> txs
   in case nub assetIds of
        [assetId] -> pure (Transfer assetId)
-       _ -> throwE $ txTransferError "Cannot consolidate transactions with different asset IDs"
+       _ -> throwE $ errMsg TxTransferError "Cannot consolidate transactions with different asset IDs"
   where
     getAssetId (Tx {_asset=Transfer assetId}) = assetId
     getAssetId tx = fst $ txidAndJson tx

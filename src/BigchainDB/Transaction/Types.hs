@@ -84,7 +84,7 @@ instance FromJSON Transaction where
     -- Verify txid
     let (Txid calcTxid) = fst (txidAndJson tx)
     notEqual <- (/=Txid calcTxid) <$> obj .:- "id"
-    when notEqual $ fail ("Txid mismatch: " ++ T.unpack calcTxid)
+    when notEqual $ fail ("expected txid: " ++ T.unpack calcTxid)
 
     -- Verify version
     version <- obj .:- "version"

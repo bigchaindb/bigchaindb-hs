@@ -13,14 +13,15 @@ import BigchainDB.CryptoConditions.Types
 import BigchainDB.Prelude
 
 
-parseDSL :: T.Text -> Except BDBError CryptoCondition
+parseDSL :: T.Text -> Except Err CryptoCondition
 parseDSL t = complete $ parse dslParser t
   where
     complete (Done _ r) = return r
     complete (Partial f) = complete $ f ""
     complete (Fail rest _ msg) =
       let offset = T.length t - T.length rest
-       in throwE $ conditionDslParseError $ msg <> " at char " <> show offset
+          mmsg = msg <> " at char " <> show offset
+       in throwE $ errMsg TxConditionParseError $ T.pack mmsg
 
 
 dslParser :: Parser CryptoCondition

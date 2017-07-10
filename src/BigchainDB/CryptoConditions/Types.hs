@@ -77,6 +77,6 @@ fulfillEd25519 pk sig e@(Ed25519 pk' Nothing) =
 fulfillEd25519 _ _ c = c
 
 
-readStandardFulfillmentBase64 :: Fulfillment -> Except BDBError CryptoCondition
+readStandardFulfillmentBase64 :: Fulfillment -> Except Err CryptoCondition
 readStandardFulfillmentBase64 = either throw pure . readFulfillmentBase64
-  where throw = throwE . invalidFulfillment
+  where throw = throwE . errStr TxInvalidFulfillment

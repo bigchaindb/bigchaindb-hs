@@ -55,4 +55,4 @@ jsonRPC' bs = do
     runJsonRpc parsed
   pure $ toStrict $ encode $ wrapJson result
   where
-    parseError = BDBError (-32700) Null
+    parseError = errStr InvalidJson

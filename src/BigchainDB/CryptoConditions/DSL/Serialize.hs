@@ -42,10 +42,10 @@ localName pk locals =
 --------------------------------------------------------------------------------
 -- Deserialize DSL - splices variables back into expression
 --
-deserializeDSL :: T.Text -> [T.Text] -> Except BDBError CryptoCondition
+deserializeDSL :: T.Text -> [T.Text] -> Except Err CryptoCondition
 deserializeDSL expr locals = do
   let parse = AT.parseOnly (spliceVars locals) expr 
-  spliced <- ExceptT (return parse) `jerr` conditionDslParseError
+  spliced <- withExcept (errStr TxConditionParseError) (ExceptT $ return parse)
   parseDSL spliced
 
 

@@ -25,7 +25,7 @@ library
                        BigchainDB.CryptoConditions.Types,
                        BigchainDB.Data.Aeson,
                        BigchainDB.Data.Utils,
-                       BigchainDB.Exceptions,
+                       BigchainDB.Errors,
                        BigchainDB.Prelude,
                        BigchainDB.Transaction,
                        BigchainDB.Transaction.Common,

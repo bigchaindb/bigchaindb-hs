@@ -24,8 +24,8 @@ import BigchainDB.Transaction.Types as TTE
 
 
 mkCreateTx :: AssetData -> PublicKey -> [OutputSpec]
-           -> Metadata -> Except BDBError Transaction
-mkCreateTx _ _ [] _ = throwE $ txCreateError "Outputs cannot be empty"
+           -> Metadata -> Except Err Transaction
+mkCreateTx _ _ [] _ = throwE $ errMsg TxCreateError "Outputs cannot be empty"
 mkCreateTx assetData (PK creator) outputSpecs metadata = do
     let ffill = ed25519Condition creator
         inputs = [Input nullOutputLink ffill]
@@ -40,15 +40,15 @@ signCondition msg cond (SK sk) =
   in fulfillEd25519 pk sig cond
 
 
-signInput :: SecretKey -> ByteString -> Input -> Except BDBError Input
+signInput :: SecretKey -> ByteString -> Input -> Except Err Input
 signInput sk msg (Input l cond) =
   let ffill = signCondition msg cond sk
   in if conditionIsSigned ffill
         then pure $ Input l ffill
-        else throwE missingPrivateKeys
+        else throwE $ errMsg TxSignMissingPrivateKeys "missing private keys"
 
 
-signTx :: SecretKey -> Transaction -> Except BDBError Transaction
+signTx :: SecretKey -> Transaction -> Except Err Transaction
 signTx sk tx@(Tx asset inputs outputs metadata) = do 
   let msg = encodeDeterm $ removeSigs $ toJSON tx
   signedInputs <- mapM (signInput sk msg) inputs
