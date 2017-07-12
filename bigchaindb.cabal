@@ -1,5 +1,5 @@
 name:                bigchaindb
-version:             0.1.0.1
+version:             0.2.0
 synopsis:            Common code library for BigchainDB
 license:             Apache-2.0
 license-file:        LICENSES.md
@@ -16,6 +16,9 @@ Flag so
 
 library
   exposed-modules:     BigchainDB.API,
+                       BigchainDB.API.Http,
+                       BigchainDB.API.Tx,
+                       BigchainDB.API.Utils,
                        BigchainDB.Crypto,
                        BigchainDB.Crypto.B58Keys,
                        BigchainDB.CryptoConditions,
@@ -39,6 +42,8 @@ library
                        base58-bytestring,
                        cryptonite,
                        cryptoconditions,
+                       http-client,
+                       http-conduit,
                        unordered-containers,
                        microlens,
                        microlens-platform,

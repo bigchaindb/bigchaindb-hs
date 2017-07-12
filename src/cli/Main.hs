@@ -16,7 +16,8 @@ import BigchainDB.Prelude
 import System.Exit
 
 
-type Method = ExceptT BDBError IO Value
+type Method = ExceptT Err IO Value
+
 
 parseCmd :: Parser Method
 parseCmd = subparser $

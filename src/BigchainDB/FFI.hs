@@ -45,11 +45,7 @@ foreign import ccall "dynamic" mkFun :: FunPtr (Ptr a -> IO CLLong)
 
 
 jsonRPC :: FFIMethod
-jsonRPC = toFFI jsonRPC'
-
-
-jsonRPC' :: BS.ByteString -> IO BS.ByteString
-jsonRPC' bs = do
+jsonRPC = toFFI $ \bs -> do
   result <- runExceptT $ do
     parsed <- either (throwE . parseError) pure $ eitherDecodeStrict bs
     runJsonRpc parsed
