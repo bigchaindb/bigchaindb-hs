@@ -25,14 +25,14 @@ httpMethod obj path method setup = do
 httpGetPath :: JsonMethod
 httpGetPath = ioMethod $ \obj -> do
   path <- obj .: "path"
-  httpMethod obj path "" id
+  httpMethod obj path "GET" id
 
 
 httpGetTransaction :: JsonMethod
 httpGetTransaction = ioMethod $ \obj -> do
   (Txid txid) <- obj .: "txid"
   let path = "api/v1/transactions/" ++ unpack txid
-  httpMethod obj path "" id
+  httpMethod obj path "GET" id
 
 
 httpPostTransaction :: JsonMethod

@@ -35,6 +35,7 @@ methods = Map.fromList
   , ("showErrorClasses", (showErrorClasses, "Show all error classes"))
   , ("httpGetPath", (httpGetPath, "GET /some/path from a server"))
   , ("httpGetTransaction", (httpGetTransaction, "GET a transaction by ID"))
+  , ("showMethods", (showMethods, "show all API methods"))
   ]
 
 
@@ -71,3 +72,9 @@ generateKeyPair _ = do
 
 showErrorClasses :: JsonMethod
 showErrorClasses _ = return $ object ["errors" .= allErrorClasses]
+
+
+showMethods :: JsonMethod
+showMethods _ =
+  let m = [(name, desc) | (name, (_, desc)) <- Map.toAscList methods]
+  in pure $ object ["methods" .= m]
