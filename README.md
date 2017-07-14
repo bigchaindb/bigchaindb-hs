@@ -1,8 +1,6 @@
 # Bigchaindb-hs
 
-[BigchainDB](https://github.com/bigchaindb/bigchaindb) client tools for creating and signing transactions.
-
-Achtung! Work in progress! Much of the below may already be wrong!
+[BigchainDB Shared](https://github.com/libscott/bigchaindb-shared) backend in Haskell.
 
 ## Building
 
