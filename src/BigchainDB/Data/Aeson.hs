@@ -47,5 +47,5 @@ withStrictObject label act = withObject label $ \obj -> do
      else pure r
   where
     -- Slightly dodgy function here. It's neccesary to manually add edges
-    -- to avoid statement re-ordering when using unsafePerformIO.
+    -- to sequence pure and impure computations in this case.
     unsafeDepend a = unsafePerformIO . seq a

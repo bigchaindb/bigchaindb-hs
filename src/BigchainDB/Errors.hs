@@ -34,6 +34,7 @@ data ErrClass =
   | TxConditionParseError
   | TxSignMissingPrivateKeys
   | TxWrongId
+  | Http404NotFound
   deriving (Enum, Eq, Generic, Show)
 
 instance ToJSON ErrClass where

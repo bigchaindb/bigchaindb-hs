@@ -14,6 +14,7 @@ import Data.Functor.Identity as ALL
 import Data.Maybe as ALL (fromJust)
 import Data.Monoid as ALL
 import Data.Set as ALL (Set)
+import Data.Text as ALL (unpack)
 
 import BigchainDB.Errors as ALL
 import BigchainDB.Data.Utils as ALL

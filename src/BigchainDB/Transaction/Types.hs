@@ -18,7 +18,7 @@ module BigchainDB.Transaction.Types
   , OutputLink(..)
   , OutputSpec
   , Transaction(..)
-  , Txid
+  , Txid(..)
   , Metadata
   , AssetData
   , getTxid

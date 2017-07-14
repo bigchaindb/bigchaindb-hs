@@ -98,6 +98,7 @@ test-suite test
                        containers,
                        base64-bytestring,
                        base58-bytestring,
+                       random,
                        tasty,
                        tasty-hunit,
                        tasty-golden,

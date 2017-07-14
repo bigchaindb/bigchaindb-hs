@@ -34,6 +34,7 @@ methods = Map.fromList
   , ("verifyFulfillment", (verifyFulfillment, "Verify a fulfillment payload"))
   , ("showErrorClasses", (showErrorClasses, "Show all error classes"))
   , ("httpGetPath", (httpGetPath, "GET /some/path from a server"))
+  , ("httpGetTransaction", (httpGetTransaction, "GET a transaction by ID"))
   ]
 
 
