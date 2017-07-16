@@ -31,7 +31,7 @@ library
                        BigchainDB.Errors,
                        BigchainDB.Prelude,
                        BigchainDB.Transaction,
-                       BigchainDB.Transaction.Common,
+                       BigchainDB.Transaction.Sign,
                        BigchainDB.Transaction.Types,
                        BigchainDB.Transaction.Transfer
   build-depends:       base,

@@ -20,23 +20,28 @@ import Lens.Micro
 
 createTx :: JsonMethod
 createTx = pureMethod $ \obj -> do
-  act <- TX.mkCreateTx <$> obj .:? "asset" .!= TX.nullPayload
-                       <*> obj .:  "creator"
-                       <*> obj .:  "outputs"
-                       <*> obj .:? "metadata" .!= TX.nullPayload
+  act <- TX.mkCreateTx <$> obj .:-? "asset" .!= TX.nullPayload
+                       <*> obj .:-  "creator"
+                       <*> obj .:-  "outputs"
+                       <*> obj .:-? "metadata" .!= TX.nullPayload
   pure $ toJSON <$> act
 
 
 signTx :: JsonMethod
 signTx = pureMethod $ \obj -> do
-  tx <- obj .: "tx"
-  key <- obj .: "key"
-  pure $ toJSON <$> TX.signTx key tx
+  tx <- obj .:- "tx"
+  keys <- obj .:- "keys" :: Parser [SecretKey]
+  check <- obj .:-? "check" .!= True
+  pure $ do
+    let signed = foldl TX.signTxPartial tx keys
+    if check && not (TX.txIsSigned signed)
+       then throwE $ errMsg TxSignMissingPrivateKeys "missing private keys"
+       else pure $ toJSON signed
 
 
 validateTx :: JsonMethod
 validateTx = pureMethod $ \obj -> do
-  txVal <- obj .: "tx" :: Parser Value
+  txVal <- obj .:- "tx" :: Parser Value
   let res = fromJSON txVal :: Result TX.Transaction
   pure $
     case res of
@@ -50,21 +55,21 @@ validateTx = pureMethod $ \obj -> do
 
 validateCondition :: JsonMethod
 validateCondition = pureMethod $ \obj -> do
-  _ <- parseJSON (Object obj) :: Parser TX.Condition
+  _ <- obj .:- "condition" :: Parser TX.Condition
   pure $ pure ok
 
 
 parseConditionDSL :: JsonMethod
 parseConditionDSL = pureMethod $ \obj -> do
-  expr <- obj .: "expr"
+  expr <- obj .:- "expr"
   pure $ toJSON . TX.Condition <$> parseDSL expr
 
 
 signCondition :: JsonMethod
 signCondition = pureMethod $ \obj -> do
-  (TX.Condition cond) <- obj .: "condition"
-  keys <- obj .: "keys" :: Parser [SecretKey]
-  msg <- encodeUtf8 <$> obj .: "msg"
+  (TX.Condition cond) <- obj .:- "condition"
+  keys <- obj .:- "keys" :: Parser [SecretKey]
+  msg <- encodeUtf8 <$> obj .:- "msg"
   let signed = foldl (TX.signCondition msg) cond keys
       mff = getFulfillmentBase64 signed
       e = errMsg TxSignMissingPrivateKeys "missing private keys"
@@ -73,9 +78,9 @@ signCondition = pureMethod $ \obj -> do
 
 verifyFulfillment :: JsonMethod
 verifyFulfillment = pureMethod $ \obj -> do
-  (TX.Condition target) <- obj .: "condition"
-  ff <- encodeUtf8 <$> obj .: "fulfillment"
-  msg <- encodeUtf8 <$> obj .: "msg"
+  (TX.Condition target) <- obj .:- "condition"
+  ff <- encodeUtf8 <$> obj .:- "fulfillment"
+  msg <- encodeUtf8 <$> obj .:- "msg"
   pure $ do
     ffill <- readStandardFulfillmentBase64 ff
     let valid = validate (getConditionURI target) ffill msg
@@ -84,8 +89,8 @@ verifyFulfillment = pureMethod $ \obj -> do
 
 readFulfillment :: JsonMethod
 readFulfillment = pureMethod $ \obj -> do
-  ff <- encodeUtf8 <$> obj .: "fulfillment"
-  --msg <- encodeUtf8 <$> obj .:? "message"
+  ff <- encodeUtf8 <$> obj .:- "fulfillment"
+  --msg <- encodeUtf8 <$> obj .:-? "message"
   pure $ do
     ffill <- readStandardFulfillmentBase64 ff
     pure $ toJSON $ TX.Condition ffill
@@ -96,10 +101,10 @@ readFulfillment = pureMethod $ \obj -> do
 
 transferTx :: JsonMethod
 transferTx = pureMethod $ \obj -> do
-  act <- TX.mkTransferTx <$> obj .:  "spends"
-                         <*> obj .:? "links" .!= mempty
-                         <*> obj .:  "outputs"
-                         <*> obj .:? "metadata" .!= TX.nullPayload
+  act <- TX.mkTransferTx <$> obj .:-  "spends"
+                         <*> obj .:-? "links" .!= mempty
+                         <*> obj .:-  "outputs"
+                         <*> obj .:-? "metadata" .!= TX.nullPayload
   pure $ toJSON <$> act
 
 

@@ -22,6 +22,7 @@ module BigchainDB.Transaction.Types
   , Metadata
   , AssetData
   , getTxid
+  , createOutput
   , encodeDeterm
   , removeSigs
   , nullPayload
@@ -283,6 +284,12 @@ instance FromJSON Output where
 
 
 type OutputSpec = (Amount, T.Text)
+
+
+createOutput :: OutputSpec -> Except Err Output
+createOutput (amount, expr) = do
+  c <- parseDSL expr
+  return $ Output (Condition c) amount
 
 --------------------------------------------------------------------------------
 -- Output Conditions

@@ -13,7 +13,6 @@ import qualified Data.Set as Set
 
 import BigchainDB.CryptoConditions
 import BigchainDB.Prelude
-import BigchainDB.Transaction.Common
 import BigchainDB.Transaction.Types
 
 
