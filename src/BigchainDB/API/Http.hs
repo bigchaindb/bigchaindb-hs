@@ -2,6 +2,8 @@
 
 module BigchainDB.API.Http where
 
+import Control.Exception (try)
+
 import Data.Aeson.Types
 
 import Network.HTTP.Simple
@@ -19,12 +21,20 @@ httpMethod obj path method setup = do
   pure $ do
     let reqStr = method ++ " " ++ server ++ path
     req <- setup <$> parseRequest reqStr
-    response <- lift (httpJSONEither req)
-    checkResponse response
+    response <- wrapHttpErrors $ httpJSONEither req
     case getResponseBody response of
-         Left jsonError ->
-           throwE $ errStr HttpJsonError $ show jsonError
+         Left jsonError -> throwE $ errStr HttpJsonError $ show jsonError
          Right r -> pure r
+
+
+wrapHttpErrors :: Show a => IO (Response a) -> ExceptT Err IO (Response a)
+wrapHttpErrors act = do
+  eresponse <- lift $ try act
+  case eresponse of
+       Left e ->
+         throwE $ errStr HttpConnectionError $ show $
+           (e :: HttpException)
+       Right r -> checkResponse r *> pure r
 
 
 checkResponse :: Show a => Response a -> ExceptT Err IO ()

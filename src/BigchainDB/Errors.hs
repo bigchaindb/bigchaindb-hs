@@ -35,6 +35,7 @@ data ErrClass =
   | TxSignMissingPrivateKeys
   | TxWrongId
   | HttpError
+  | HttpConnectionError
   | HttpJsonError
   | Http404NotFound
   deriving (Enum, Eq, Generic, Show)
