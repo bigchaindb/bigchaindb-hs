@@ -35,6 +35,7 @@ methods = Map.fromList
   , ("showErrorClasses", (showErrorClasses, "Show all error classes"))
   , ("httpGetPath", (httpGetPath, "GET /some/path from a server"))
   , ("httpGetTransaction", (httpGetTransaction, "GET a transaction by ID"))
+  , ("httpPostTransaction", (httpPostTransaction, "POST a transaction"))
   , ("showMethods", (showMethods, "show all API methods"))
   ]
 
