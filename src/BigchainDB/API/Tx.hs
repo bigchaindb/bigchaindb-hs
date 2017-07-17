@@ -61,7 +61,7 @@ validateCondition = pureMethod $ \obj -> do
 
 parseConditionDSL :: JsonMethod
 parseConditionDSL = pureMethod $ \obj -> do
-  expr <- obj .:- "expr"
+  expr <- obj .:- "spec"
   pure $ toJSON . TX.Condition <$> parseDSL expr
 
 

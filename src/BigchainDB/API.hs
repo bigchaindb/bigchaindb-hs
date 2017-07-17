@@ -32,10 +32,10 @@ methods = Map.fromList
   , ("signCondition", (signCondition, "Sign a condition"))
   , ("readFulfillment", (readFulfillment, "Get condition from fulfillment"))
   , ("verifyFulfillment", (verifyFulfillment, "Verify a fulfillment payload"))
-  , ("showErrorClasses", (showErrorClasses, "Show all error classes"))
   , ("httpGetPath", (httpGetPath, "GET /some/path from a server"))
-  , ("httpGetTransaction", (httpGetTransaction, "GET a transaction by ID"))
-  , ("httpPostTransaction", (httpPostTransaction, "POST a transaction"))
+  , ("httpGetTx", (httpGetTransaction, "GET a transaction by ID"))
+  , ("httpPostTx", (httpPostTransaction, "POST a transaction"))
+  , ("showErrorClasses", (showErrorClasses, "Show all error classes"))
   , ("showMethods", (showMethods, "show all API methods"))
   ]
 

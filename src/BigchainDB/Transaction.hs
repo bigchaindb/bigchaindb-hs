@@ -5,12 +5,6 @@ module BigchainDB.Transaction
   , mkCreateTx
   ) where
 
-import qualified Crypto.PubKey.Ed25519 as Ed2
-
-import Data.Aeson
-
-import qualified Data.ByteString.Char8 as C8
-
 import BigchainDB.Crypto
 import BigchainDB.CryptoConditions
 import BigchainDB.Prelude

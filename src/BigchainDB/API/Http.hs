@@ -21,18 +21,18 @@ httpMethod obj path method setup = do
   pure $ do
     let reqStr = method ++ " " ++ server ++ path
     req <- setup <$> parseRequest reqStr
-    response <- wrapHttpErrors $ httpJSONEither req
+    response <- execHttp $ httpJSONEither req
     case getResponseBody response of
          Left jsonError -> throwE $ errStr HttpJsonError $ show jsonError
          Right r -> pure r
 
 
-wrapHttpErrors :: Show a => IO (Response a) -> ExceptT Err IO (Response a)
-wrapHttpErrors act = do
+execHttp :: Show a => IO (Response a) -> ExceptT Err IO (Response a)
+execHttp act = do
   eresponse <- lift $ try act
   case eresponse of
        Left e ->
-         throwE $ errStr HttpConnectionError $ show $
+         throwE $ errStr HttpConnectionError $ show
            (e :: HttpException)
        Right r -> checkResponse r *> pure r
 
@@ -40,9 +40,9 @@ wrapHttpErrors act = do
 checkResponse :: Show a => Response a -> ExceptT Err IO ()
 checkResponse response = do
   let code = getResponseStatusCode response
-  when (code == 404) $ do
+  when (code == 404) $
     throwE $ errStr Http404NotFound $ show response
-  when (code - mod code 100 /= 200) $ do
+  when (code - mod code 100 /= 200) $
     throwE $ errStr HttpError $ show response
 
 

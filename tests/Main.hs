@@ -109,12 +109,12 @@ httpClientTest = testCase "http client tests" $ do
                           , "asset" .= object [ "msg" .= a ]
                           ]
       server = "http://localhost:9984/" :: String
-  (Right stx) <- runExceptT $ do
+  out <- runExceptT $ do
     tx <- createTx createSpec
-    API.signTx $ object [ "tx" .= tx, "key" .= aliceSec ]
-  res <- runExceptT $
-    httpPostTransaction $ object ["server" .= server, "tx" .= stx ]
-  res @?= Right stx
+    stx <- API.signTx $ object [ "tx" .= tx, "keys" .= [aliceSec] ]
+    res <- httpPostTransaction $ object ["server" .= server, "tx" .= stx ]
+    pure $ res @?= stx
+  either (error . show) id out
 
 
 alice, bob, aliceSec, bobSec :: Text

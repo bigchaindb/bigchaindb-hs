@@ -59,10 +59,7 @@ getAssetLink txs =
 
 txToInputs :: Transaction -> [(Amount, Input)]
 txToInputs tx@(Tx {_outputs=outputs}) =
-  [(n, convertOutput (getTxid tx) (idx, cond))
-    | (idx, Output (Condition cond) n) <- zip [0..] outputs]
-
-
-convertOutput :: Txid -> (Int, CryptoCondition) -> Input
-convertOutput txid (idx, cond) =
-  Input (OutputLink txid idx) cond
+  let txid = getTxid tx
+      convert (idx, (Output (Condition cond) n)) =
+        (n, Input (OutputLink txid idx) cond)
+   in convert <$> zip [0..] outputs
